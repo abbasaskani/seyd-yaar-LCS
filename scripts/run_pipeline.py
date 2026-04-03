@@ -17,6 +17,7 @@ from lcs_pipeline.copernicus_io import (
     describe_dataset,
     download_subset,
     estimate_subset,
+    resolve_requested_variables,
     normalize_velocity_dataset,
     open_subset,
     resolve_target_time,
@@ -103,9 +104,11 @@ def main() -> None:
     subset_path = raw_dir / 'currents_subset.nc'
     subset_meta_path = raw_dir / 'subset_meta.json'
 
+    request_variables = resolve_requested_variables(ds_meta, cfg.raw['u_variable_candidates'], cfg.raw['v_variable_candidates'])
+
     estimate = estimate_subset(
         dataset_id=cfg.raw['dataset_id'],
-        variables=list(dict.fromkeys(cfg.raw['u_variable_candidates'] + cfg.raw['v_variable_candidates'])),
+        variables=request_variables,
         lon_min=bbox['lon_min'], lon_max=bbox['lon_max'], lat_min=bbox['lat_min'], lat_max=bbox['lat_max'],
         start_dt=start_dt, end_dt=target_dt,
         coordinates_selection_method=cfg.raw.get('coordinates_selection_method', 'nearest'),
@@ -141,7 +144,7 @@ def main() -> None:
         print('Downloading raw subset from Copernicus...')
         download_subset(
             dataset_id=cfg.raw['dataset_id'],
-            variables=list(dict.fromkeys(cfg.raw['u_variable_candidates'] + cfg.raw['v_variable_candidates'])),
+            variables=request_variables,
             lon_min=bbox['lon_min'], lon_max=bbox['lon_max'], lat_min=bbox['lat_min'], lat_max=bbox['lat_max'],
             start_dt=start_dt, end_dt=target_dt,
             output_path=subset_path,
