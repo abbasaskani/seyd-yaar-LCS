@@ -86,6 +86,33 @@ def resolve_target_time(run_cfg: dict[str, Any], ds_meta: dict[str, Any]) -> tup
     return start, target, mode
 
 
+
+
+def resolve_requested_variables(ds_meta: dict[str, Any], u_candidates: list[str], v_candidates: list[str]) -> list[str]:
+    short_names = []
+    standard_to_short = {}
+    for item in ds_meta.get("variables", []) or []:
+        short = item.get("short_name")
+        std = item.get("standard_name")
+        if short:
+            short_names.append(short)
+        if std and short:
+            standard_to_short[std] = short
+
+    def _pick(candidates: list[str]) -> str:
+        for cand in candidates:
+            if cand in short_names:
+                return cand
+            mapped = standard_to_short.get(cand)
+            if mapped:
+                return mapped
+        available = ", ".join(sorted(set(short_names)))
+        raise KeyError(f"Could not resolve requested variable from candidates {candidates!r}. Available dataset variables: {available}")
+
+    u_var = _pick(u_candidates)
+    v_var = _pick(v_candidates)
+    return [u_var, v_var]
+
 def estimate_subset(dataset_id: str, variables: list[str], lon_min: float, lon_max: float, lat_min: float, lat_max: float, start_dt: datetime, end_dt: datetime, coordinates_selection_method: str = "nearest") -> dict[str, Any]:
     resp = copernicusmarine.subset(
         dataset_id=dataset_id,
