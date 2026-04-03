@@ -10,7 +10,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from lcs_pipeline.config import load_config
-from lcs_pipeline.copernicus_io import describe_dataset, estimate_subset, resolve_target_time
+from lcs_pipeline.copernicus_io import describe_dataset, estimate_subset, resolve_target_time, resolve_requested_variables
 
 
 def parse_args():
@@ -54,9 +54,10 @@ def main():
 
     ds_meta = describe_dataset(cfg.raw['dataset_id'])
     start_dt, target_dt, mode = resolve_target_time(run_cfg, ds_meta)
+    request_variables = resolve_requested_variables(ds_meta, cfg.raw['u_variable_candidates'], cfg.raw['v_variable_candidates'])
     est = estimate_subset(
         dataset_id=cfg.raw['dataset_id'],
-        variables=list(dict.fromkeys(cfg.raw['u_variable_candidates'] + cfg.raw['v_variable_candidates'])),
+        variables=request_variables,
         lon_min=bbox['lon_min'], lon_max=bbox['lon_max'], lat_min=bbox['lat_min'], lat_max=bbox['lat_max'],
         start_dt=start_dt, end_dt=target_dt,
         coordinates_selection_method=cfg.raw.get('coordinates_selection_method', 'nearest'),
