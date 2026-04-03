@@ -2,8 +2,16 @@
   "project_name": "seyd-yaar-LCS",
   "product_id": "GLOBAL_ANALYSISFORECAST_PHY_001_024",
   "dataset_id": "cmems_mod_glo_phy_anfc_merged-uv_PT1H-i",
-  "u_variable_candidates": ["utotal", "uo", "u"],
-  "v_variable_candidates": ["vtotal", "vo", "v"],
+  "u_variable_candidates": [
+    "uo",
+    "utotal",
+    "u"
+  ],
+  "v_variable_candidates": [
+    "vo",
+    "vtotal",
+    "v"
+  ],
   "default_bbox": {
     "lon_min": 61.0,
     "lon_max": 65.0,
@@ -16,8 +24,8 @@
   "compute_grid_factor": 3.0,
   "integrator": {
     "method": "dop853",
-    "rtol": 1e-6,
-    "atol": 1e-8
+    "rtol": 1e-06,
+    "atol": 1e-08
   },
   "ridge_extraction": {
     "dist_tol_grid_cells": 3.0,
@@ -40,7 +48,10 @@
     "quiver_stride": 3,
     "fps": 6
   },
-  "scheduled_modes": ["today", "tomorrow"],
+  "scheduled_modes": [
+    "today",
+    "tomorrow"
+  ],
   "outputs_dir": "outputs",
   "pages_dir": "docs/latest",
   "keep_archive_in_repo": 0,
