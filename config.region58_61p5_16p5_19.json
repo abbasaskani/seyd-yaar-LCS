@@ -1,0 +1,54 @@
+{
+  "project_name": "seyd_yaar_LCS",
+  "product_id": "GLOBAL_ANALYSISFORECAST_PHY_001_024",
+  "dataset_id": "cmems_mod_glo_phy_anfc_merged-uv_PT1H-i",
+  "u_variable_candidates": [
+    "utotal",
+    "uo",
+    "u"
+  ],
+  "v_variable_candidates": [
+    "vtotal",
+    "vo",
+    "v"
+  ],
+  "region_geojson": "region_bbox.geojson",
+  "bbox": {
+    "lon_min": 58.5,
+    "lon_max": 61.5,
+    "lat_min": 16.5,
+    "lat_max": 19.0
+  },
+  "target_datetime_utc": null,
+  "analysis_lag_hours": 6,
+  "backward_days": 7,
+  "coordinates_selection_method": "nearest",
+  "compute_grid_factor": 3.0,
+  "integrator": {
+    "method": "dop853",
+    "rtol": 1e-06,
+    "atol": 1e-08
+  },
+  "ridge_extraction": {
+    "dist_tol_grid_cells": 3.0,
+    "percentile": 70,
+    "sdd_thresh": 0.0,
+    "smooth_sigma": 1.0
+  },
+  "hotspots": {
+    "top_n": 5,
+    "percentile": 98.5,
+    "localmax_window": 7,
+    "min_separation_px": 8
+  },
+  "clusters": {
+    "percentile": 94.0
+  },
+  "gif": {
+    "enabled": true,
+    "max_frames": 72,
+    "quiver_stride": 3,
+    "fps": 6
+  },
+  "outputs_dir": "outputs"
+}

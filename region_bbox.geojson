@@ -1,0 +1,23 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "bbox_58_61.5_16.5_19"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [58.50, 16.5],
+            [61.5, 16.5],
+            [61.5, 19.0],
+            [58.50, 19.0],
+            [58.50, 16.5]
+          ]
+        ]
+      }
+    }
+  ]
+}
