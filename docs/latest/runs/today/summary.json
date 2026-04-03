@@ -1,0 +1,210 @@
+{
+  "target_time": "2026-04-03T01:00:00Z",
+  "u_variable": "uo",
+  "v_variable": "vo",
+  "hotspots": [
+    {
+      "i": 0,
+      "j": 0,
+      "ftle": 0.0,
+      "x_km": -701.2987223678379,
+      "y_km": -889.5606418682632,
+      "lon": 54.0,
+      "lat": 6.0,
+      "rank": 1
+    },
+    {
+      "i": 0,
+      "j": 8,
+      "ftle": 0.0,
+      "x_km": -701.2987223678379,
+      "y_km": -864.8506240385892,
+      "lon": 54.0,
+      "lat": 6.222222222222222,
+      "rank": 2
+    },
+    {
+      "i": 0,
+      "j": 16,
+      "ftle": 0.0,
+      "x_km": -701.2987223678379,
+      "y_km": -840.1406062089153,
+      "lon": 54.0,
+      "lat": 6.444444444444444,
+      "rank": 3
+    },
+    {
+      "i": 0,
+      "j": 24,
+      "ftle": 0.0,
+      "x_km": -701.2987223678379,
+      "y_km": -815.4305883792413,
+      "lon": 54.0,
+      "lat": 6.666666666666667,
+      "rank": 4
+    },
+    {
+      "i": 0,
+      "j": 32,
+      "ftle": 0.0,
+      "x_km": -701.2987223678379,
+      "y_km": -790.7205705495674,
+      "lon": 54.0,
+      "lat": 6.888888888888888,
+      "rank": 5
+    }
+  ],
+  "top_clusters": [
+    {
+      "cluster_id": 1,
+      "n_cells": 270613,
+      "area_km2": 2505064.5314066457,
+      "peak_ftle": 0.0,
+      "peak_lon": 54.0,
+      "peak_lat": 6.0,
+      "centroid_lon": 60.50000000000001,
+      "centroid_lat": 14.0,
+      "polygon_lonlat": [
+        [
+          54.0,
+          6.0
+        ],
+        [
+          67.0,
+          6.0
+        ],
+        [
+          67.0,
+          22.0
+        ],
+        [
+          54.0,
+          22.0
+        ],
+        [
+          54.0,
+          6.0
+        ]
+      ],
+      "rank": 1
+    }
+  ],
+  "run_label": "today",
+  "bbox": {
+    "lon_min": 54.0,
+    "lon_max": 67.0,
+    "lat_min": 6.0,
+    "lat_max": 22.0
+  },
+  "backward_days": 7.0,
+  "dataset_id": "cmems_mod_glo_phy_anfc_merged-uv_PT1H-i",
+  "clusters_preview": [
+    {
+      "cluster_id": 1,
+      "n_cells": 270613,
+      "area_km2": 2505064.5314066457,
+      "peak_ftle": 0.0,
+      "peak_lon": 54.0,
+      "peak_lat": 6.0,
+      "centroid_lon": 60.50000000000001,
+      "centroid_lat": 14.0,
+      "polygon_lonlat": [
+        [
+          54.0,
+          6.0
+        ],
+        [
+          67.0,
+          6.0
+        ],
+        [
+          67.0,
+          22.0
+        ],
+        [
+          54.0,
+          22.0
+        ],
+        [
+          54.0,
+          6.0
+        ]
+      ],
+      "rank": 1
+    }
+  ],
+  "processed": {
+    "ftle_map_png": "outputs/latest/today/processed/ftle_map.png",
+    "surface_currents_mp4": "outputs/latest/today/processed/surface_currents.mp4",
+    "ftle_field_netcdf": "outputs/latest/today/processed/ftle_field.nc",
+    "hotspots_csv": "outputs/latest/today/processed/hotspots.csv",
+    "hotspots_geojson": "outputs/latest/today/processed/hotspots.geojson",
+    "clusters_geojson": "outputs/latest/today/processed/clusters.geojson",
+    "ridges_geojson": "outputs/latest/today/processed/ridges.geojson"
+  },
+  "raw": {
+    "subset_netcdf": "outputs/latest/today/raw/currents_subset.nc",
+    "subset_meta_json": "outputs/latest/today/raw/subset_meta.json"
+  },
+  "estimate": {
+    "dataset_id": "cmems_mod_glo_phy_anfc_merged-uv_PT1H-i",
+    "dataset_name": "hourly mean merged surface currents from oceanic circulation, tides and waves",
+    "dataset_time_coverage": {
+      "time_min": "None",
+      "time_max": "None"
+    },
+    "run_label": "today",
+    "bbox": {
+      "lon_min": 54.0,
+      "lon_max": 67.0,
+      "lat_min": 6.0,
+      "lat_max": 22.0
+    },
+    "target_time_utc": "2026-04-03T01:00:00+00:00",
+    "window_start_utc": "2026-03-27T01:00:00+00:00",
+    "window_end_utc": "2026-04-03T01:00:00+00:00",
+    "estimated_final_subset_file": {
+      "mb": 39.103603053435116,
+      "human": "39.10 MB"
+    },
+    "estimated_total_data_transfer": {
+      "mb": 2705.4861679389314,
+      "human": "2.64 GB"
+    },
+    "variables": [
+      "uo",
+      "vo"
+    ],
+    "coordinates_extent": [
+      {
+        "minimum": 54.0,
+        "maximum": 67.0,
+        "unit": "degrees_east",
+        "coordinate_id": "longitude"
+      },
+      {
+        "minimum": 6.0,
+        "maximum": 22.0,
+        "unit": "degrees_north",
+        "coordinate_id": "latitude"
+      },
+      {
+        "minimum": "2026-03-27T01:00:00+00:00",
+        "maximum": "2026-04-03T01:00:00+00:00",
+        "unit": "iso8601",
+        "coordinate_id": "time"
+      },
+      {
+        "minimum": 0.49402499198913574,
+        "maximum": 0.49402499198913574,
+        "unit": "m",
+        "coordinate_id": "depth"
+      }
+    ],
+    "status": "001",
+    "message": "The request was run with the dry-run option. No data was downloaded.",
+    "file_path": "cmems_mod_glo_phy_anfc_merged-uv_PT1H-i_uo-vo_54.00E-67.00E_6.00N-22.00N_0.49m_2026-03-27-2026-04-03.nc",
+    "filename": "cmems_mod_glo_phy_anfc_merged-uv_PT1H-i_uo-vo_54.00E-67.00E_6.00N-22.00N_0.49m_2026-03-27-2026-04-03.nc"
+  },
+  "timestamp_utc": "2026-04-03T07:06:35.281830+00:00"
+}

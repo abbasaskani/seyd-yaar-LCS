@@ -1,0 +1,46 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "cluster_id": 1,
+        "n_cells": 270613,
+        "area_km2": 2505064.5314066457,
+        "peak_ftle": 0.0,
+        "peak_lon": 54.0,
+        "peak_lat": 6.0,
+        "centroid_lon": 60.50000000000001,
+        "centroid_lat": 14.0,
+        "rank": 1
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              54.0,
+              6.0
+            ],
+            [
+              67.0,
+              6.0
+            ],
+            [
+              67.0,
+              22.0
+            ],
+            [
+              54.0,
+              22.0
+            ],
+            [
+              54.0,
+              6.0
+            ]
+          ]
+        ]
+      }
+    }
+  ]
+}

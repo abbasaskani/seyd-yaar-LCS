@@ -1,0 +1,38 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "today_bbox"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              54.0,
+              6.0
+            ],
+            [
+              67.0,
+              6.0
+            ],
+            [
+              67.0,
+              22.0
+            ],
+            [
+              54.0,
+              22.0
+            ],
+            [
+              54.0,
+              6.0
+            ]
+          ]
+        ]
+      }
+    }
+  ]
+}
