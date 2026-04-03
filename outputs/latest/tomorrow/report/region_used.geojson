@@ -1,0 +1,38 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "tomorrow_bbox"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              59.0,
+              14.0
+            ],
+            [
+              67.0,
+              14.0
+            ],
+            [
+              67.0,
+              24.0
+            ],
+            [
+              59.0,
+              24.0
+            ],
+            [
+              59.0,
+              14.0
+            ]
+          ]
+        ]
+      }
+    }
+  ]
+}
