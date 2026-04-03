@@ -162,7 +162,7 @@ def main() -> None:
     if media_cfg.get('create_mp4', True):
         mp4_path = processed_dir / 'surface_currents.mp4'
         make_surface_currents_mp4(ds, u_var=u_var, v_var=v_var, hotspots=out.hotspots, path=mp4_path, max_frames=int(media_cfg.get('max_frames',72)), quiver_stride=int(media_cfg.get('quiver_stride',3)), fps=int(media_cfg.get('fps',6)))
-        mp4_rel = str(mp4_path.relative_to(cfg.base_dir)).replace('\','/')
+        mp4_rel = str(mp4_path.relative_to(cfg.base_dir)).replace('\\', '/')
 
     region_geojson_path = report_dir / 'region_used.geojson'
     region_geojson_path.write_text(json.dumps(geojson_from_bbox(bbox, name=f'{label}_bbox'), indent=2), encoding='utf-8')
@@ -178,17 +178,17 @@ def main() -> None:
         'hotspots': out.hotspots,
         'clusters_preview': out.clusters[:10],
         'processed': {
-            'ftle_map_png': str((processed_dir / 'ftle_map.png').relative_to(cfg.base_dir)).replace('\','/'),
+            'ftle_map_png': str((processed_dir / 'ftle_map.png').relative_to(cfg.base_dir)).replace('\\', '/'),
             'surface_currents_mp4': mp4_rel,
-            'ftle_field_netcdf': str((processed_dir / 'ftle_field.nc').relative_to(cfg.base_dir)).replace('\','/'),
-            'hotspots_csv': str((processed_dir / 'hotspots.csv').relative_to(cfg.base_dir)).replace('\','/'),
-            'hotspots_geojson': str((processed_dir / 'hotspots.geojson').relative_to(cfg.base_dir)).replace('\','/'),
-            'clusters_geojson': str((processed_dir / 'clusters.geojson').relative_to(cfg.base_dir)).replace('\','/'),
-            'ridges_geojson': str((processed_dir / 'ridges.geojson').relative_to(cfg.base_dir)).replace('\','/'),
+            'ftle_field_netcdf': str((processed_dir / 'ftle_field.nc').relative_to(cfg.base_dir)).replace('\\', '/'),
+            'hotspots_csv': str((processed_dir / 'hotspots.csv').relative_to(cfg.base_dir)).replace('\\', '/'),
+            'hotspots_geojson': str((processed_dir / 'hotspots.geojson').relative_to(cfg.base_dir)).replace('\\', '/'),
+            'clusters_geojson': str((processed_dir / 'clusters.geojson').relative_to(cfg.base_dir)).replace('\\', '/'),
+            'ridges_geojson': str((processed_dir / 'ridges.geojson').relative_to(cfg.base_dir)).replace('\\', '/'),
         },
         'raw': {
-            'subset_netcdf': str(subset_path.relative_to(cfg.base_dir)).replace('\','/'),
-            'subset_meta_json': str(subset_meta_path.relative_to(cfg.base_dir)).replace('\','/'),
+            'subset_netcdf': str(subset_path.relative_to(cfg.base_dir)).replace('\\', '/'),
+            'subset_meta_json': str(subset_meta_path.relative_to(cfg.base_dir)).replace('\\', '/'),
         },
         'estimate': pre,
         'timestamp_utc': datetime.now(timezone.utc).isoformat(),
