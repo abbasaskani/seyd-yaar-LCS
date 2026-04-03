@@ -8,6 +8,18 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 
+def _ensure_even_frame(frame: np.ndarray) -> np.ndarray:
+    """Trim one row/column when needed so ffmpeg/libx264 accepts yuv420p."""
+    if frame.ndim < 2:
+        return frame
+    h, w = frame.shape[:2]
+    if h % 2 == 1:
+        frame = frame[:-1, ...]
+    if w % 2 == 1:
+        frame = frame[:, :-1, ...]
+    return frame
+
+
 def make_surface_currents_mp4(ds, u_var: str, v_var: str, hotspots: list[dict], path: str | Path, max_frames: int = 72, quiver_stride: int = 3, fps: int = 6) -> Path:
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -19,7 +31,7 @@ def make_surface_currents_mp4(ds, u_var: str, v_var: str, hotspots: list[dict], 
     lat = ds["latitude"].values
     LON, LAT = np.meshgrid(lon, lat, indexing="xy")
 
-    writer = imageio.get_writer(str(path), fps=fps, codec="libx264", quality=7, macro_block_size=1)
+    writer = imageio.get_writer(str(path), fps=fps, codec="libx264", quality=7, macro_block_size=None)
     try:
         for idx in frame_inds:
             u = ds[u_var].isel(time=idx).values
@@ -28,7 +40,15 @@ def make_surface_currents_mp4(ds, u_var: str, v_var: str, hotspots: list[dict], 
             fig, ax = plt.subplots(figsize=(8.5, 6.5), dpi=160)
             im = ax.pcolormesh(lon, lat, speed, shading="auto")
             plt.colorbar(im, ax=ax, label="|U| (m/s)")
-            ax.quiver(LON[::quiver_stride, ::quiver_stride], LAT[::quiver_stride, ::quiver_stride], u[::quiver_stride, ::quiver_stride], v[::quiver_stride, ::quiver_stride], scale=None, width=0.002, alpha=0.9)
+            ax.quiver(
+                LON[::quiver_stride, ::quiver_stride],
+                LAT[::quiver_stride, ::quiver_stride],
+                u[::quiver_stride, ::quiver_stride],
+                v[::quiver_stride, ::quiver_stride],
+                scale=None,
+                width=0.002,
+                alpha=0.9,
+            )
             for hs in hotspots:
                 ax.scatter(hs["lon"], hs["lat"], s=30, marker="x")
                 ax.text(hs["lon"], hs["lat"], f" H{hs['rank']}", fontsize=8)
@@ -41,7 +61,9 @@ def make_surface_currents_mp4(ds, u_var: str, v_var: str, hotspots: list[dict], 
             fig.savefig(buf, format="png", bbox_inches="tight")
             plt.close(fig)
             buf.seek(0)
-            writer.append_data(imageio.imread(buf))
+            frame = imageio.imread(buf)
+            frame = _ensure_even_frame(frame)
+            writer.append_data(frame)
     finally:
         writer.close()
     return path
