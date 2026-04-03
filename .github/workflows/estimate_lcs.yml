@@ -1,0 +1,82 @@
+name: Estimate LCS download
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Date mode
+        required: true
+        default: today
+        type: choice
+        options: [today, tomorrow, custom]
+      custom_date:
+        description: Custom target datetime in UTC (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SSZ)
+        required: false
+        default: ""
+        type: string
+      backward_days:
+        description: Backward days
+        required: true
+        default: "7"
+        type: string
+      lon_min:
+        description: Minimum longitude (east)
+        required: true
+        default: "61.0"
+        type: string
+      lon_max:
+        description: Maximum longitude (east)
+        required: true
+        default: "65.0"
+        type: string
+      lat_min:
+        description: Minimum latitude (north)
+        required: true
+        default: "17.0"
+        type: string
+      lat_max:
+        description: Maximum latitude (north)
+        required: true
+        default: "22.0"
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  estimate:
+    runs-on: ubuntu-latest
+    env:
+      COPERNICUSMARINE_SERVICE_USERNAME: ${{ secrets.COPERNICUSMARINE_SERVICE_USERNAME }}
+      COPERNICUSMARINE_SERVICE_PASSWORD: ${{ secrets.COPERNICUSMARINE_SERVICE_PASSWORD }}
+      PYTHONUNBUFFERED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          cache: 'pip'
+          cache-dependency-path: requirements.txt
+      - name: Install requirements
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install -e . || true
+      - name: Estimate download
+        run: |
+          python scripts/estimate_run.py \
+            --config config/defaults.json \
+            --mode "${{ inputs.mode }}" \
+            --custom-date "${{ inputs.custom_date }}" \
+            --backward-days "${{ inputs.backward_days }}" \
+            --lon-min "${{ inputs.lon_min }}" \
+            --lon-max "${{ inputs.lon_max }}" \
+            --lat-min "${{ inputs.lat_min }}" \
+            --lat-max "${{ inputs.lat_max }}" \
+            --output outputs/estimate_report.json
+      - name: Upload estimate report
+        uses: actions/upload-artifact@v4
+        with:
+          name: estimate-report
+          path: outputs/estimate_report.json
+          if-no-files-found: error
