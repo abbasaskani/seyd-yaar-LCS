@@ -67,6 +67,30 @@ def human_size(n):
         n /= 1024.0
 
 
+def json_safe(value):
+    if isinstance(value, (str, int, float, bool)) or value is None:
+        return value
+    if isinstance(value, dict):
+        return {str(k): json_safe(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple, set)):
+        return [json_safe(v) for v in value]
+    if hasattr(value, "isoformat"):
+        try:
+            return value.isoformat()
+        except Exception:
+            pass
+    if hasattr(value, "model_dump"):
+        try:
+            return json_safe(value.model_dump())
+        except Exception:
+            pass
+    if hasattr(value, "__dict__"):
+        try:
+            return {k: json_safe(v) for k, v in vars(value).items() if not k.startswith('_')}
+        except Exception:
+            pass
+    return str(value)
+
 def build_run_config(cfg_raw: dict, args: argparse.Namespace) -> tuple[dict, dict]:
     bbox = dict(cfg_raw['default_bbox'])
     for key_cli, key in [('lon_min','lon_min'),('lon_max','lon_max'),('lat_min','lat_min'),('lat_max','lat_max')]:
@@ -128,8 +152,9 @@ def main() -> None:
         'variables': estimate.get('variables'),
         'coordinates_extent': estimate.get('coordinates_extent'),
     }
-    (report_dir / 'pre_download_report.json').write_text(json.dumps(pre, indent=2, ensure_ascii=False), encoding='utf-8')
-    print(json.dumps(pre, indent=2, ensure_ascii=False))
+    pre_safe = json_safe(pre)
+    (report_dir / 'pre_download_report.json').write_text(json.dumps(pre_safe, indent=2, ensure_ascii=False), encoding='utf-8')
+    print(json.dumps(pre_safe, indent=2, ensure_ascii=False))
     if not args.skip_confirm and sys.stdin.isatty():
         ans = input('Continue with download and analysis? (y/N): ').strip().lower()
         if ans not in {'y','yes'}:
@@ -197,7 +222,7 @@ def main() -> None:
             'subset_netcdf': str(subset_path.relative_to(cfg.base_dir)).replace('\\','/'),
             'subset_meta_json': str(subset_meta_path.relative_to(cfg.base_dir)).replace('\\','/'),
         },
-        'estimate': pre,
+        'estimate': pre_safe,
         'timestamp_utc': datetime.now(timezone.utc).isoformat(),
     }
     save_summary_json(out, report_dir / 'summary.json', extra=summary)

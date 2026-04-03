@@ -37,6 +37,30 @@ def human_size(n):
         n /= 1024.0
 
 
+def json_safe(value):
+    if isinstance(value, (str, int, float, bool)) or value is None:
+        return value
+    if isinstance(value, dict):
+        return {str(k): json_safe(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple, set)):
+        return [json_safe(v) for v in value]
+    if hasattr(value, "isoformat"):
+        try:
+            return value.isoformat()
+        except Exception:
+            pass
+    if hasattr(value, "model_dump"):
+        try:
+            return json_safe(value.model_dump())
+        except Exception:
+            pass
+    if hasattr(value, "__dict__"):
+        try:
+            return {k: json_safe(v) for k, v in vars(value).items() if not k.startswith('_')}
+        except Exception:
+            pass
+    return str(value)
+
 def main():
     args = parse_args()
     cfg = load_config(args.config)
@@ -76,8 +100,9 @@ def main():
     }
     out = Path(args.output)
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding='utf-8')
-    print(json.dumps(payload, indent=2, ensure_ascii=False))
+    payload_safe = json_safe(payload)
+    out.write_text(json.dumps(payload_safe, indent=2, ensure_ascii=False), encoding='utf-8')
+    print(json.dumps(payload_safe, indent=2, ensure_ascii=False))
 
 if __name__ == '__main__':
     main()
