@@ -43,16 +43,19 @@ on:
 permissions:
   contents: read
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
 jobs:
   estimate:
     runs-on: ubuntu-latest
     env:
       COPERNICUSMARINE_SERVICE_USERNAME: ${{ secrets.COPERNICUSMARINE_SERVICE_USERNAME }}
       COPERNICUSMARINE_SERVICE_PASSWORD: ${{ secrets.COPERNICUSMARINE_SERVICE_PASSWORD }}
-      PYTHONUNBUFFERED: "1"
+      PYTHONUNBUFFERED: '1'
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.10'
           cache: 'pip'
@@ -61,7 +64,6 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
-          python -m pip install -e . || true
       - name: Estimate download
         run: |
           python scripts/estimate_run.py \
@@ -75,7 +77,7 @@ jobs:
             --lat-max "${{ inputs.lat_max }}" \
             --output outputs/estimate_report.json
       - name: Upload estimate report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: estimate-report
           path: outputs/estimate_report.json
