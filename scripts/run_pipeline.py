@@ -23,6 +23,8 @@ from lcs_pipeline.copernicus_io import (
     resolve_target_time,
     subset_meta_payload,
     reuse_subset_if_match,
+    make_json_safe,
+    human_size_mb,
 )
 from lcs_pipeline.ftle import compute_attracting_ftle
 from lcs_pipeline.outputs import (
@@ -52,44 +54,6 @@ def parse_args() -> argparse.Namespace:
     ap.add_argument('--label', help='Output label override (today/tomorrow/custom)')
     return ap.parse_args()
 
-
-def human_size(n):
-    if n is None:
-        return 'unknown'
-    try:
-        n = float(n)
-    except Exception:
-        return str(n)
-    units = ['B', 'KB', 'MB', 'GB', 'TB']
-    for u in units:
-        if abs(n) < 1024 or u == units[-1]:
-            return f'{n:.2f} {u}'
-        n /= 1024.0
-
-
-def json_safe(value):
-    if isinstance(value, (str, int, float, bool)) or value is None:
-        return value
-    if isinstance(value, dict):
-        return {str(k): json_safe(v) for k, v in value.items()}
-    if isinstance(value, (list, tuple, set)):
-        return [json_safe(v) for v in value]
-    if hasattr(value, "isoformat"):
-        try:
-            return value.isoformat()
-        except Exception:
-            pass
-    if hasattr(value, "model_dump"):
-        try:
-            return json_safe(value.model_dump())
-        except Exception:
-            pass
-    if hasattr(value, "__dict__"):
-        try:
-            return {k: json_safe(v) for k, v in vars(value).items() if not k.startswith('_')}
-        except Exception:
-            pass
-    return str(value)
 
 def build_run_config(cfg_raw: dict, args: argparse.Namespace) -> tuple[dict, dict]:
     bbox = dict(cfg_raw['default_bbox'])
@@ -147,14 +111,18 @@ def main() -> None:
         'target_time_utc': target_dt.isoformat(),
         'window_start_utc': start_dt.isoformat(),
         'window_end_utc': target_dt.isoformat(),
-        'estimated_final_subset_file': {'bytes': estimate.get('file_size'), 'human': human_size(estimate.get('file_size'))},
-        'estimated_total_data_transfer': {'bytes': estimate.get('data_transfer_size'), 'human': human_size(estimate.get('data_transfer_size'))},
+        'estimated_final_subset_file': {'mb': estimate.get('file_size'), 'human': human_size_mb(estimate.get('file_size'))},
+        'estimated_total_data_transfer': {'mb': estimate.get('data_transfer_size'), 'human': human_size_mb(estimate.get('data_transfer_size'))},
         'variables': estimate.get('variables'),
         'coordinates_extent': estimate.get('coordinates_extent'),
+        'status': estimate.get('status'),
+        'message': estimate.get('message'),
+        'file_path': estimate.get('file_path'),
+        'filename': estimate.get('filename'),
     }
-    pre_safe = json_safe(pre)
-    (report_dir / 'pre_download_report.json').write_text(json.dumps(pre_safe, indent=2, ensure_ascii=False), encoding='utf-8')
-    print(json.dumps(pre_safe, indent=2, ensure_ascii=False))
+    pre = make_json_safe(pre)
+    (report_dir / 'pre_download_report.json').write_text(json.dumps(pre, indent=2, ensure_ascii=False), encoding='utf-8')
+    print(json.dumps(pre, indent=2, ensure_ascii=False))
     if not args.skip_confirm and sys.stdin.isatty():
         ans = input('Continue with download and analysis? (y/N): ').strip().lower()
         if ans not in {'y','yes'}:
@@ -175,7 +143,7 @@ def main() -> None:
             output_path=subset_path,
             coordinates_selection_method=cfg.raw.get('coordinates_selection_method', 'nearest'),
         )
-        subset_meta_path.write_text(json.dumps(desired_meta, indent=2, ensure_ascii=False), encoding='utf-8')
+        subset_meta_path.write_text(json.dumps(make_json_safe(desired_meta), indent=2, ensure_ascii=False), encoding='utf-8')
 
     raw_ds = open_subset(subset_path)
     u_var, v_var = candidate_velocity_vars(raw_ds, cfg.raw['u_variable_candidates'], cfg.raw['v_variable_candidates'])
@@ -194,7 +162,7 @@ def main() -> None:
     if media_cfg.get('create_mp4', True):
         mp4_path = processed_dir / 'surface_currents.mp4'
         make_surface_currents_mp4(ds, u_var=u_var, v_var=v_var, hotspots=out.hotspots, path=mp4_path, max_frames=int(media_cfg.get('max_frames',72)), quiver_stride=int(media_cfg.get('quiver_stride',3)), fps=int(media_cfg.get('fps',6)))
-        mp4_rel = str(mp4_path.relative_to(cfg.base_dir)).replace('\\','/')
+        mp4_rel = str(mp4_path.relative_to(cfg.base_dir)).replace('\','/')
 
     region_geojson_path = report_dir / 'region_used.geojson'
     region_geojson_path.write_text(json.dumps(geojson_from_bbox(bbox, name=f'{label}_bbox'), indent=2), encoding='utf-8')
@@ -210,23 +178,22 @@ def main() -> None:
         'hotspots': out.hotspots,
         'clusters_preview': out.clusters[:10],
         'processed': {
-            'ftle_map_png': str((processed_dir / 'ftle_map.png').relative_to(cfg.base_dir)).replace('\\','/'),
+            'ftle_map_png': str((processed_dir / 'ftle_map.png').relative_to(cfg.base_dir)).replace('\','/'),
             'surface_currents_mp4': mp4_rel,
-            'ftle_field_netcdf': str((processed_dir / 'ftle_field.nc').relative_to(cfg.base_dir)).replace('\\','/'),
-            'hotspots_csv': str((processed_dir / 'hotspots.csv').relative_to(cfg.base_dir)).replace('\\','/'),
-            'hotspots_geojson': str((processed_dir / 'hotspots.geojson').relative_to(cfg.base_dir)).replace('\\','/'),
-            'clusters_geojson': str((processed_dir / 'clusters.geojson').relative_to(cfg.base_dir)).replace('\\','/'),
-            'ridges_geojson': str((processed_dir / 'ridges.geojson').relative_to(cfg.base_dir)).replace('\\','/'),
+            'ftle_field_netcdf': str((processed_dir / 'ftle_field.nc').relative_to(cfg.base_dir)).replace('\','/'),
+            'hotspots_csv': str((processed_dir / 'hotspots.csv').relative_to(cfg.base_dir)).replace('\','/'),
+            'hotspots_geojson': str((processed_dir / 'hotspots.geojson').relative_to(cfg.base_dir)).replace('\','/'),
+            'clusters_geojson': str((processed_dir / 'clusters.geojson').relative_to(cfg.base_dir)).replace('\','/'),
+            'ridges_geojson': str((processed_dir / 'ridges.geojson').relative_to(cfg.base_dir)).replace('\','/'),
         },
         'raw': {
-            'subset_netcdf': str(subset_path.relative_to(cfg.base_dir)).replace('\\','/'),
-            'subset_meta_json': str(subset_meta_path.relative_to(cfg.base_dir)).replace('\\','/'),
+            'subset_netcdf': str(subset_path.relative_to(cfg.base_dir)).replace('\','/'),
+            'subset_meta_json': str(subset_meta_path.relative_to(cfg.base_dir)).replace('\','/'),
         },
-        'estimate': pre_safe,
+        'estimate': pre,
         'timestamp_utc': datetime.now(timezone.utc).isoformat(),
     }
     save_summary_json(out, report_dir / 'summary.json', extra=summary)
-    # also copy top-level summary for page convenience
     shutil.copy2(report_dir / 'summary.json', latest_dir / 'summary.json')
     print(f'Run completed. Outputs under: {latest_dir}')
 

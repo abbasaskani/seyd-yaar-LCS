@@ -10,7 +10,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from lcs_pipeline.config import load_config
-from lcs_pipeline.copernicus_io import describe_dataset, estimate_subset, resolve_target_time, resolve_requested_variables
+from lcs_pipeline.copernicus_io import describe_dataset, estimate_subset, resolve_target_time, resolve_requested_variables, make_json_safe, human_size_mb
 
 
 def parse_args():
@@ -26,40 +26,6 @@ def parse_args():
     ap.add_argument('--output', default='outputs/estimate_report.json')
     return ap.parse_args()
 
-
-def human_size(n):
-    if n is None:
-        return 'unknown'
-    n = float(n)
-    for u in ['B','KB','MB','GB','TB']:
-        if abs(n) < 1024 or u == 'TB':
-            return f'{n:.2f} {u}'
-        n /= 1024.0
-
-
-def json_safe(value):
-    if isinstance(value, (str, int, float, bool)) or value is None:
-        return value
-    if isinstance(value, dict):
-        return {str(k): json_safe(v) for k, v in value.items()}
-    if isinstance(value, (list, tuple, set)):
-        return [json_safe(v) for v in value]
-    if hasattr(value, "isoformat"):
-        try:
-            return value.isoformat()
-        except Exception:
-            pass
-    if hasattr(value, "model_dump"):
-        try:
-            return json_safe(value.model_dump())
-        except Exception:
-            pass
-    if hasattr(value, "__dict__"):
-        try:
-            return {k: json_safe(v) for k, v in vars(value).items() if not k.startswith('_')}
-        except Exception:
-            pass
-    return str(value)
 
 def main():
     args = parse_args()
@@ -86,23 +52,26 @@ def main():
         start_dt=start_dt, end_dt=target_dt,
         coordinates_selection_method=cfg.raw.get('coordinates_selection_method', 'nearest'),
     )
-    payload = {
+    payload = make_json_safe({
         'run_label': mode,
         'dataset_id': cfg.raw['dataset_id'],
         'dataset_name': ds_meta.get('dataset_name'),
         'bbox': bbox,
         'window_start_utc': start_dt.isoformat(),
         'window_end_utc': target_dt.isoformat(),
-        'estimated_final_subset_file': {'bytes': est.get('file_size'), 'human': human_size(est.get('file_size'))},
-        'estimated_total_data_transfer': {'bytes': est.get('data_transfer_size'), 'human': human_size(est.get('data_transfer_size'))},
+        'estimated_final_subset_file': {'mb': est.get('file_size'), 'human': human_size_mb(est.get('file_size'))},
+        'estimated_total_data_transfer': {'mb': est.get('data_transfer_size'), 'human': human_size_mb(est.get('data_transfer_size'))},
         'variables': est.get('variables'),
         'coordinates_extent': est.get('coordinates_extent'),
-    }
+        'status': est.get('status'),
+        'message': est.get('message'),
+        'file_path': est.get('file_path'),
+        'filename': est.get('filename'),
+    })
     out = Path(args.output)
     out.parent.mkdir(parents=True, exist_ok=True)
-    payload_safe = json_safe(payload)
-    out.write_text(json.dumps(payload_safe, indent=2, ensure_ascii=False), encoding='utf-8')
-    print(json.dumps(payload_safe, indent=2, ensure_ascii=False))
+    out.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding='utf-8')
+    print(json.dumps(payload, indent=2, ensure_ascii=False))
 
 if __name__ == '__main__':
     main()

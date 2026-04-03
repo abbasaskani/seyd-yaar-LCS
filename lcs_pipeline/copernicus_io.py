@@ -27,22 +27,26 @@ def _coord_limits(parts) -> tuple[Any, Any]:
 
 def describe_dataset(dataset_id: str) -> dict[str, Any]:
     cat = copernicusmarine.describe(dataset_id=dataset_id, disable_progress_bar=True)
-    ds = cat.products[0].datasets[0]
+    prod = cat.products[0]
+    ds = prod.datasets[0]
     version = ds.versions[0]
-    parts = version.parts
+    part = version.parts[0]
+    time_min, time_max = _coord_limits(version.parts)
     variables = []
-    for part in parts:
-        for service in getattr(part, "services", []) or []:
-            for var in getattr(service, "variables", []) or []:
-                variables.append({
-                    "short_name": getattr(var, "short_name", None),
-                    "standard_name": getattr(var, "standard_name", None),
-                    "units": getattr(var, "units", None),
-                })
-    time_min, time_max = _coord_limits(parts)
+    try:
+        for var in part.services[0].variables:
+            variables.append({
+                "short_name": getattr(var, "short_name", None),
+                "standard_name": getattr(var, "standard_name", None),
+                "units": getattr(var, "units", None),
+            })
+    except Exception:
+        pass
     return {
         "dataset_id": ds.dataset_id,
         "dataset_name": ds.dataset_name,
+        "product_id": prod.product_id,
+        "part_name": getattr(part, "name", None),
         "time_min": time_min,
         "time_max": time_max,
         "variables": variables,
@@ -50,10 +54,10 @@ def describe_dataset(dataset_id: str) -> dict[str, Any]:
 
 
 def parse_dataset_time_limit(value: Any) -> datetime | None:
-    if value is None:
+    if value in (None, "", "None"):
         return None
     if isinstance(value, datetime):
-        return value.astimezone(timezone.utc)
+        return value.astimezone(timezone.utc) if value.tzinfo else value.replace(tzinfo=timezone.utc)
     if isinstance(value, (int, float)):
         x = float(value)
         if x > 1e16:
@@ -86,8 +90,6 @@ def resolve_target_time(run_cfg: dict[str, Any], ds_meta: dict[str, Any]) -> tup
     return start, target, mode
 
 
-
-
 def resolve_requested_variables(ds_meta: dict[str, Any], u_candidates: list[str], v_candidates: list[str]) -> list[str]:
     short_names = []
     standard_to_short = {}
@@ -113,6 +115,51 @@ def resolve_requested_variables(ds_meta: dict[str, Any], u_candidates: list[str]
     v_var = _pick(v_candidates)
     return [u_var, v_var]
 
+
+def _maybe_model_dump(value: Any) -> Any:
+    if hasattr(value, 'model_dump'):
+        try:
+            return value.model_dump()
+        except Exception:
+            pass
+    if hasattr(value, '__dict__') and not isinstance(value, (str, bytes, bytearray)):
+        try:
+            return dict(value.__dict__)
+        except Exception:
+            pass
+    return value
+
+
+def make_json_safe(value: Any) -> Any:
+    value = _maybe_model_dump(value)
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    if isinstance(value, Path):
+        return str(value)
+    if isinstance(value, datetime):
+        return value.isoformat()
+    if isinstance(value, dict):
+        return {str(k): make_json_safe(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple, set)):
+        return [make_json_safe(v) for v in value]
+    return str(value)
+
+
+def human_size_mb(n: Any) -> str:
+    if n is None:
+        return 'unknown'
+    try:
+        mb = float(n)
+    except Exception:
+        return str(n)
+    if mb < 1024:
+        return f'{mb:.2f} MB'
+    gb = mb / 1024.0
+    if gb < 1024:
+        return f'{gb:.2f} GB'
+    return f'{gb / 1024.0:.2f} TB'
+
+
 def estimate_subset(dataset_id: str, variables: list[str], lon_min: float, lon_max: float, lat_min: float, lat_max: float, start_dt: datetime, end_dt: datetime, coordinates_selection_method: str = "nearest") -> dict[str, Any]:
     resp = copernicusmarine.subset(
         dataset_id=dataset_id,
@@ -128,12 +175,7 @@ def estimate_subset(dataset_id: str, variables: list[str], lon_min: float, lon_m
         dry_run=True,
         disable_progress_bar=True,
     )
-    return {
-        "file_size": getattr(resp, "file_size", None),
-        "data_transfer_size": getattr(resp, "data_transfer_size", None),
-        "coordinates_extent": getattr(resp, "coordinates_extent", None),
-        "variables": getattr(resp, "variables", None),
-    }
+    return make_json_safe(resp)
 
 
 def download_subset(dataset_id: str, variables: list[str], lon_min: float, lon_max: float, lat_min: float, lat_max: float, start_dt: datetime, end_dt: datetime, output_path: str | Path, coordinates_selection_method: str = "nearest") -> Path:
@@ -199,7 +241,7 @@ def normalize_velocity_dataset(ds: xr.Dataset, u_var: str, v_var: str) -> xr.Dat
 
 
 def subset_meta_payload(dataset_id: str, bbox: dict[str, float], start_dt: datetime, target_dt: datetime, mode_label: str, estimate: dict[str, Any], raw_path: str) -> dict[str, Any]:
-    return {
+    payload = {
         "dataset_id": dataset_id,
         "bbox": bbox,
         "window_start_utc": start_dt.isoformat(),
@@ -208,6 +250,7 @@ def subset_meta_payload(dataset_id: str, bbox: dict[str, float], start_dt: datet
         "estimate": estimate,
         "raw_subset_path": raw_path,
     }
+    return make_json_safe(payload)
 
 
 def reuse_subset_if_match(meta_path: Path, subset_path: Path, desired_meta: dict[str, Any]) -> bool:
