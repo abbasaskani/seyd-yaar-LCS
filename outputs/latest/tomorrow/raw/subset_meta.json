@@ -6,13 +6,13 @@
     "lat_min": 17.0,
     "lat_max": 22.0
   },
-  "window_start_utc": "2026-04-15T12:00:00+00:00",
-  "window_end_utc": "2026-04-22T12:00:00+00:00",
+  "window_start_utc": "2026-04-16T12:00:00+00:00",
+  "window_end_utc": "2026-04-23T12:00:00+00:00",
   "run_label": "tomorrow",
   "estimate": {
-    "file_path": "cmems_mod_glo_phy_anfc_merged-uv_PT1H-i_uo-vo_61.00E-65.00E_17.00N-22.00N_0.49m_2026-04-15-2026-04-22.nc",
+    "file_path": "cmems_mod_glo_phy_anfc_merged-uv_PT1H-i_uo-vo_61.00E-65.00E_17.00N-22.00N_0.49m_2026-04-16-2026-04-23.nc",
     "output_directory": ".",
-    "filename": "cmems_mod_glo_phy_anfc_merged-uv_PT1H-i_uo-vo_61.00E-65.00E_17.00N-22.00N_0.49m_2026-04-15-2026-04-22.nc",
+    "filename": "cmems_mod_glo_phy_anfc_merged-uv_PT1H-i_uo-vo_61.00E-65.00E_17.00N-22.00N_0.49m_2026-04-16-2026-04-23.nc",
     "file_size": 3.8690381679389314,
     "data_transfer_size": 292.19175572519083,
     "variables": [
@@ -33,8 +33,8 @@
         "coordinate_id": "latitude"
       },
       {
-        "minimum": "2026-04-15T12:00:00+00:00",
-        "maximum": "2026-04-22T12:00:00+00:00",
+        "minimum": "2026-04-16T12:00:00+00:00",
+        "maximum": "2026-04-23T12:00:00+00:00",
         "unit": "iso8601",
         "coordinate_id": "time"
       },
