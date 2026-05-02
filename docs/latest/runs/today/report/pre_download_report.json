@@ -7,21 +7,21 @@
   },
   "run_label": "today",
   "bbox": {
-    "lon_min": 61.0,
+    "lon_min": 54.0,
     "lon_max": 65.0,
-    "lat_min": 17.0,
-    "lat_max": 22.0
+    "lat_min": 0.0,
+    "lat_max": 15.0
   },
-  "target_time_utc": "2026-05-01T23:00:00+00:00",
-  "window_start_utc": "2026-04-24T23:00:00+00:00",
-  "window_end_utc": "2026-05-01T23:00:00+00:00",
+  "target_time_utc": "2026-05-02T09:00:00+00:00",
+  "window_start_utc": "2026-04-25T09:00:00+00:00",
+  "window_end_utc": "2026-05-02T09:00:00+00:00",
   "estimated_final_subset_file": {
-    "mb": 3.8690381679389314,
-    "human": "3.87 MB"
+    "mb": 31.069007633587788,
+    "human": "31.07 MB"
   },
   "estimated_total_data_transfer": {
-    "mb": 292.19175572519083,
-    "human": "292.19 MB"
+    "mb": 1803.2405496183205,
+    "human": "1.76 GB"
   },
   "variables": [
     "uo",
@@ -29,20 +29,20 @@
   ],
   "coordinates_extent": [
     {
-      "minimum": 61.0,
+      "minimum": 54.0,
       "maximum": 65.0,
       "unit": "degrees_east",
       "coordinate_id": "longitude"
     },
     {
-      "minimum": 17.0,
-      "maximum": 22.0,
+      "minimum": 0.0,
+      "maximum": 15.0,
       "unit": "degrees_north",
       "coordinate_id": "latitude"
     },
     {
-      "minimum": "2026-04-24T23:00:00+00:00",
-      "maximum": "2026-05-01T23:00:00+00:00",
+      "minimum": "2026-04-25T09:00:00+00:00",
+      "maximum": "2026-05-02T09:00:00+00:00",
       "unit": "iso8601",
       "coordinate_id": "time"
     },
@@ -55,6 +55,6 @@
   ],
   "status": "001",
   "message": "The request was run with the dry-run option. No data was downloaded.",
-  "file_path": "cmems_mod_glo_phy_anfc_merged-uv_PT1H-i_uo-vo_61.00E-65.00E_17.00N-22.00N_0.49m_2026-04-24-2026-05-01.nc",
-  "filename": "cmems_mod_glo_phy_anfc_merged-uv_PT1H-i_uo-vo_61.00E-65.00E_17.00N-22.00N_0.49m_2026-04-24-2026-05-01.nc"
+  "file_path": "cmems_mod_glo_phy_anfc_merged-uv_PT1H-i_uo-vo_54.00E-65.00E_0.00N-15.00N_0.49m_2026-04-25-2026-05-02.nc",
+  "filename": "cmems_mod_glo_phy_anfc_merged-uv_PT1H-i_uo-vo_54.00E-65.00E_0.00N-15.00N_0.49m_2026-04-25-2026-05-02.nc"
 }
