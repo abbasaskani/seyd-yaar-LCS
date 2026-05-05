@@ -2,17 +2,19 @@ from __future__ import annotations
 
 import argparse
 import json
-from datetime import datetime, timedelta, timezone
+import shutil
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 import numpy as np
+from zoneinfo import ZoneInfo
 
 from lcs_pipeline.config import load_config
-from lcs_pipeline.coords import aoi_from_geojson, bbox_info
+from lcs_pipeline.coords import aoi_from_geojson
 from lcs_pipeline.copernicus_io import (
     describe_dataset,
-    estimate_subset,
     download_subset,
+    estimate_subset,
     normalize_dataset,
     resolve_requested_variables,
 )
@@ -31,49 +33,64 @@ from lcs_pipeline.timezones import build_target_windows, choose_actual_time, sel
 
 
 def parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="Run Seyd Yar LCS pipeline for one target horizon")
+    p = argparse.ArgumentParser(description="Run Seyd Yar LCS pipeline for one target")
     p.add_argument("--config", default="config/defaults.json")
     p.add_argument("--offset-days", type=int, default=0)
     p.add_argument("--run-label", default=None)
     p.add_argument("--preset", default=None, help="timezone preset key override")
-    p.add_argument("--bbox", nargs=4, type=float, metavar=("LON_MIN", "LON_MAX", "LAT_MIN", "LAT_MAX"))
     p.add_argument("--aoi-file", default=None)
-    p.add_argument("--mode", default="manual")
+    p.add_argument("--mode", default="routine")
+    p.add_argument("--target-local-date", default=None, help="YYYY-MM-DD local date override")
+    p.add_argument("--target-local-datetime", default=None, help="ISO local datetime override without timezone or with timezone")
     return p.parse_args()
 
 
 def resolve_aoi(project, args):
-    cfg = project.raw
-    if args.aoi_file:
-        path = project.resolve_path(args.aoi_file)
-        if path.exists():
-            return aoi_from_geojson(path), "geojson_override"
-    cfg_aoi = project.resolve_path(cfg.get("aoi_geojson", "config/aoi/current.geojson"))
-    if cfg_aoi.exists():
-        return aoi_from_geojson(cfg_aoi), "geojson"
-    if args.bbox:
-        lon_min, lon_max, lat_min, lat_max = args.bbox
-        return bbox_info({"lon_min": lon_min, "lon_max": lon_max, "lat_min": lat_min, "lat_max": lat_max}), "bbox_override"
-    return bbox_info(cfg["default_bbox"]), "bbox_default"
+    path = project.resolve_path(args.aoi_file) if args.aoi_file else project.aoi_path
+    if not path.exists():
+        raise FileNotFoundError(f"AOI file not found at {path}")
+    return aoi_from_geojson(path), str(path)
+
+
+def parse_local_target(args: argparse.Namespace, tz_name: str) -> datetime:
+    tz = ZoneInfo(tz_name)
+    now_utc = datetime.now(timezone.utc)
+    local_today = now_utc.astimezone(tz).replace(hour=0, minute=0, second=0, microsecond=0)
+    if args.target_local_datetime:
+        dt = datetime.fromisoformat(args.target_local_datetime)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=tz)
+        else:
+            dt = dt.astimezone(tz)
+        return dt
+    if args.target_local_date:
+        d = date.fromisoformat(args.target_local_date)
+        return datetime(d.year, d.month, d.day, 0, 0, 0, tzinfo=tz)
+    return local_today + timedelta(days=int(args.offset_days))
+
+
+def iso_utc_tag(dt: datetime) -> str:
+    return dt.astimezone(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+
+
+def ensure_clean_dir(path: Path) -> None:
+    if path.exists():
+        shutil.rmtree(path)
+    path.mkdir(parents=True, exist_ok=True)
 
 
 def main() -> None:
     args = parse_args()
     project = load_config(args.config)
     cfg = project.raw
-    out_root = project.outputs_dir
-    out_root.mkdir(parents=True, exist_ok=True)
+    project.outputs_dir.mkdir(parents=True, exist_ok=True)
+    project.archive_dir.mkdir(parents=True, exist_ok=True)
 
-    aoi_info, aoi_mode = resolve_aoi(project, args)
+    aoi_info, aoi_source = resolve_aoi(project, args)
     tz_decision = select_preset(cfg, aoi_info.centroid_lon, aoi_info.centroid_lat, override_key=args.preset)
-
-    now_utc = datetime.now(timezone.utc)
-    base_local = now_utc.astimezone(datetime.now().astimezone().tzinfo)
-    # nominal local date is based on selected preset local time
     preset_tz = tz_decision.preset.tz
-    from zoneinfo import ZoneInfo
-    local_today = now_utc.astimezone(ZoneInfo(preset_tz)).replace(hour=0, minute=0, second=0, microsecond=0)
-    target_local_date = local_today + timedelta(days=int(args.offset_days))
+    target_anchor_local = parse_local_target(args, preset_tz)
+    target_local_date = target_anchor_local.replace(hour=0, minute=0, second=0, microsecond=0)
     nominal_local, windows_utc, subset_end_utc = build_target_windows(cfg, target_local_date, preset_tz)
     subset_start_utc = windows_utc[0][0] - timedelta(days=float(cfg.get("backward_days", 7)))
 
@@ -81,9 +98,11 @@ def main() -> None:
     u_var, v_var = resolve_requested_variables(ds_meta, cfg["u_variable_candidates"], cfg["v_variable_candidates"])
     variables = [u_var, v_var]
 
-    run_label = args.run_label or f"day_{args.offset_days:+d}".replace("+", "plus").replace("-", "minus")
-    run_dir = out_root / "latest" / run_label
-    run_dir.mkdir(parents=True, exist_ok=True)
+    label_default = f"day_{args.offset_days:+d}".replace("+", "plus").replace("-", "minus")
+    run_label = args.run_label or label_default
+
+    staging_dir = project.outputs_dir / "_staging" / f"{run_label}_{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S')}"
+    ensure_clean_dir(staging_dir)
 
     estimate = estimate_subset(
         dataset_id=cfg["dataset_id"],
@@ -93,7 +112,7 @@ def main() -> None:
         end_utc=subset_end_utc,
         coordinates_selection_method=cfg.get("coordinates_selection_method", "nearest"),
     )
-    (run_dir / "estimate_report.json").write_text(json.dumps(estimate, indent=2, ensure_ascii=False), encoding="utf-8")
+    (staging_dir / "estimate_report.json").write_text(json.dumps(estimate, indent=2, ensure_ascii=False), encoding="utf-8")
 
     subset_path = download_subset(
         dataset_id=cfg["dataset_id"],
@@ -102,12 +121,10 @@ def main() -> None:
         start_utc=subset_start_utc,
         end_utc=subset_end_utc,
         coordinates_selection_method=cfg.get("coordinates_selection_method", "nearest"),
-        output_path=run_dir / "subset_raw.nc",
+        output_path=staging_dir / "subset_raw.nc",
     )
 
     ds = normalize_dataset(subset_path, u_var, v_var)
-    times = [t.astype("datetime64[s]").tolist().replace(tzinfo=timezone.utc) if hasattr(t.astype("datetime64[s]").tolist(), 'replace') else None for t in ds["time"].values]
-    # robust conversion
     actual_candidates = []
     for val in ds["time"].values:
         if isinstance(val, np.datetime64):
@@ -124,8 +141,7 @@ def main() -> None:
     ftle_out.metadata = {
         "run_label": run_label,
         "mode": args.mode,
-        "aoi_mode": aoi_mode,
-        "aoi_source": aoi_info.source_path,
+        "aoi_source": aoi_source,
         "centroid_lon": aoi_info.centroid_lon,
         "centroid_lat": aoi_info.centroid_lat,
         "bbox": aoi_info.bbox,
@@ -142,21 +158,42 @@ def main() -> None:
         "backward_days": cfg.get("backward_days", 7),
     }
 
-    save_ftle_netcdf(ftle_out, run_dir / "ftle.nc")
-    save_hotspots_csv(ftle_out, run_dir / "hotspots.csv")
-    save_hotspots_geojson(ftle_out, run_dir / "hotspots.geojson")
-    save_clusters_geojson(ftle_out, run_dir / "clusters.geojson")
-    save_ridges_geojson(ftle_out, run_dir / "ridges.geojson")
-    save_field_layers_json(ftle_out, run_dir / "field_layers.json")
+    save_ftle_netcdf(ftle_out, staging_dir / "ftle.nc")
+    save_hotspots_csv(ftle_out, staging_dir / "hotspots.csv")
+    save_hotspots_geojson(ftle_out, staging_dir / "hotspots.geojson")
+    save_clusters_geojson(ftle_out, staging_dir / "clusters.geojson")
+    save_ridges_geojson(ftle_out, staging_dir / "ridges.geojson")
+    save_field_layers_json(ftle_out, staging_dir / "field_layers.json")
     plot_field_map(
         ftle_out,
-        run_dir / "map_ftle.png",
+        staging_dir / "map_ftle.png",
         title=f"FTLE | {run_label} | {selection.actual_local.strftime('%Y-%m-%d %H:%M %Z')} | {selection.actual_utc.strftime('%Y-%m-%d %H:%M UTC')}",
         layer_name="ftle_smooth",
         colorbar_label="FTLE (smoothed)",
     )
-    save_summary_json(ftle_out, run_dir / "summary.json")
-    print(json.dumps({"run_dir": str(run_dir), "selection": ftle_out.metadata}, ensure_ascii=False, indent=2))
+    save_summary_json(ftle_out, staging_dir / "summary.json")
+
+    archive_key = f"{iso_utc_tag(selection.actual_utc)}__{run_label}"
+    archive_dir = project.archive_dir / archive_key
+    ensure_clean_dir(archive_dir)
+    for item in staging_dir.iterdir():
+        target = archive_dir / item.name
+        if item.is_dir():
+            shutil.copytree(item, target)
+        else:
+            shutil.copy2(item, target)
+
+    latest_dir = project.outputs_dir / "latest" / run_label
+    ensure_clean_dir(latest_dir)
+    for item in archive_dir.iterdir():
+        target = latest_dir / item.name
+        if item.is_dir():
+            shutil.copytree(item, target)
+        else:
+            shutil.copy2(item, target)
+
+    shutil.rmtree(staging_dir, ignore_errors=True)
+    print(json.dumps({"archive_dir": str(archive_dir), "latest_dir": str(latest_dir), "selection": ftle_out.metadata}, ensure_ascii=False, indent=2))
 
 
 if __name__ == "__main__":

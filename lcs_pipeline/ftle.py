@@ -32,6 +32,8 @@ class FTLEOutputs:
     persistence_5d: np.ndarray | None = None
     balanced_composite: np.ndarray | None = None
     physics_first_composite: np.ndarray | None = None
+    accumulation_potential_balanced: np.ndarray | None = None
+    accumulation_potential_physics_first: np.ndarray | None = None
 
 
 def _upsampled_axis(arr: np.ndarray, factor: float) -> np.ndarray:

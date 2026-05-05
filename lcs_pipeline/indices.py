@@ -36,4 +36,6 @@ def attach_persistence_and_scores(outputs: list[FTLEOutputs], config_raw: dict) 
             0.0,
             1.0,
         )
+        out.accumulation_potential_balanced = np.clip(out.balanced_composite * 100.0, 0.0, 100.0)
+        out.accumulation_potential_physics_first = np.clip(out.physics_first_composite * 100.0, 0.0, 100.0)
     return outputs

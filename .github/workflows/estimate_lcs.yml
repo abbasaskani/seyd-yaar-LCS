@@ -20,9 +20,10 @@ jobs:
           python-version: '3.10'
           cache: 'pip'
           cache-dependency-path: requirements.txt
-      - name: Install requirements
+      - name: Install package and requirements
         run: |
           python -m pip install --upgrade pip
+          python -m pip install -e .
           python -m pip install -r requirements.txt
       - name: Estimate
         run: python scripts/estimate_run.py
