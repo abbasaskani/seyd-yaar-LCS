@@ -88,6 +88,46 @@ def robust_normalize(field: np.ndarray, q_low: float = 5.0, q_high: float = 95.0
     return out
 
 
+
+
+def _prepare_velocity_component(da, component_name: str) -> tuple[np.ndarray, list[str]]:
+    """Return velocity as (time, lon, lat) float64 array for NumbaCS.
+
+    Handles old/new Copernicus layouts, singleton dimensions, and optional depth-like
+    dimensions by selecting the surface layer. Raises a clear error for unsupported
+    non-singleton extra dimensions instead of crashing inside np.transpose.
+    """
+    notes: list[str] = []
+    time_dim = next((d for d in da.dims if d in {"time", "valid_time"}), None)
+    lon_dim = next((d for d in da.dims if d in {"longitude", "lon", "x"}), None)
+    lat_dim = next((d for d in da.dims if d in {"latitude", "lat", "y"}), None)
+    if time_dim is None or lon_dim is None or lat_dim is None:
+        raise ValueError(
+            f"{component_name}: unsupported dims {da.dims!r}; expected time/lon/lat dimensions"
+        )
+
+    extra_dims = [d for d in da.dims if d not in {time_dim, lon_dim, lat_dim}]
+    depth_like = {"depth", "depthu", "depthv", "olevel", "lev", "z"}
+    for dim in extra_dims:
+        size = int(da.sizes.get(dim, 0))
+        if dim in depth_like and size >= 1:
+            da = da.isel({dim: 0})
+            notes.append(f"{component_name}: selected surface layer {dim}[0] from size={size}")
+        elif size == 1:
+            da = da.isel({dim: 0})
+            notes.append(f"{component_name}: squeezed singleton dim {dim}")
+        else:
+            raise ValueError(
+                f"{component_name}: unsupported extra dimension {dim!r} with size={size}; dims={da.dims!r}"
+            )
+
+    da = da.transpose(time_dim, lon_dim, lat_dim)
+    arr = da.values.astype(np.float64)
+    if arr.ndim != 3:
+        raise ValueError(f"{component_name}: expected 3D array after normalization, got shape={arr.shape}")
+    notes.append(f"{component_name}: normalized dims -> {(time_dim, lon_dim, lat_dim)}, shape={arr.shape}")
+    return arr, notes
+
 def compute_ridge_support(lon_grid: np.ndarray, lat_grid: np.ndarray, ridge_curves_lonlat: list[np.ndarray], ftle_smooth: np.ndarray, d0_deg: float = 0.15) -> np.ndarray:
     if not ridge_curves_lonlat:
         return np.zeros_like(ftle_smooth, dtype=float)
@@ -137,11 +177,13 @@ def compute_attracting_ftle(ds, u_var: str, v_var: str, config_raw: dict[str, An
     t0 = 0.0
     params = np.array([copysign(1.0, T)], dtype=float)
 
-    u = ds[u_var].values.astype(np.float64)
-    v = ds[v_var].values.astype(np.float64)
+    u, u_notes = _prepare_velocity_component(ds[u_var], u_var)
+    v, v_notes = _prepare_velocity_component(ds[v_var], v_var)
     scale = 3.6
-    u = np.transpose(u, (0, 2, 1)) * scale
-    v = np.transpose(v, (0, 2, 1)) * scale
+    u = u * scale
+    v = v * scale
+    for note in [*u_notes, *v_notes]:
+        print(f"DEBUG - {note}")
 
     grid_vel, C_eval_u, C_eval_v = get_interp_arrays_2D(t_hours, x_native, y_native, u, v)
     funcptr = get_flow_2D(grid_vel, C_eval_u, C_eval_v, extrap_mode="linear")
