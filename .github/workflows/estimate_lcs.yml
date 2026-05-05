@@ -2,49 +2,9 @@ name: Estimate LCS download
 
 on:
   workflow_dispatch:
-    inputs:
-      mode:
-        description: Date mode
-        required: true
-        default: today
-        type: choice
-        options: [today, tomorrow, custom]
-      custom_date:
-        description: Custom target datetime in UTC (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SSZ)
-        required: false
-        default: ""
-        type: string
-      backward_days:
-        description: Backward days
-        required: true
-        default: "7"
-        type: string
-      lon_min:
-        description: Minimum longitude (east)
-        required: true
-        default: "61.0"
-        type: string
-      lon_max:
-        description: Maximum longitude (east)
-        required: true
-        default: "65.0"
-        type: string
-      lat_min:
-        description: Minimum latitude (north)
-        required: true
-        default: "17.0"
-        type: string
-      lat_max:
-        description: Maximum latitude (north)
-        required: true
-        default: "22.0"
-        type: string
 
 permissions:
   contents: read
-
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 
 jobs:
   estimate:
@@ -64,21 +24,9 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
-      - name: Estimate download
-        run: |
-          python scripts/estimate_run.py \
-            --config config/defaults.json \
-            --mode "${{ inputs.mode }}" \
-            --custom-date "${{ inputs.custom_date }}" \
-            --backward-days "${{ inputs.backward_days }}" \
-            --lon-min "${{ inputs.lon_min }}" \
-            --lon-max "${{ inputs.lon_max }}" \
-            --lat-min "${{ inputs.lat_min }}" \
-            --lat-max "${{ inputs.lat_max }}" \
-            --output outputs/estimate_report.json
-      - name: Upload estimate report
-        uses: actions/upload-artifact@v6
+      - name: Estimate
+        run: python scripts/estimate_run.py
+      - uses: actions/upload-artifact@v4
         with:
-          name: estimate-report
+          name: lcs-estimate
           path: outputs/estimate_report.json
-          if-no-files-found: error

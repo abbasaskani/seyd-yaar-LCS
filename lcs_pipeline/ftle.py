@@ -7,7 +7,7 @@ import numpy as np
 from scipy.ndimage import gaussian_filter, maximum_filter, label
 from scipy.spatial import ConvexHull
 
-from .coords import local_xy_from_lonlat, lonlat_from_local_xy
+from .coords import AOIInfo, local_xy_from_lonlat, lonlat_from_local_xy, polygon_mask
 
 
 @dataclass
@@ -16,6 +16,7 @@ class FTLEOutputs:
     ftle_smooth: np.ndarray
     ridge_curves_xy: list[np.ndarray]
     ridge_curves_lonlat: list[np.ndarray]
+    ridge_support: np.ndarray
     hotspots: list[dict[str, Any]]
     clusters: list[dict[str, Any]]
     lon_grid: np.ndarray
@@ -25,6 +26,12 @@ class FTLEOutputs:
     target_time: str
     u_variable: str
     v_variable: str
+    aoi_mask: np.ndarray | None = None
+    metadata: dict[str, Any] | None = None
+    persistence_3d: np.ndarray | None = None
+    persistence_5d: np.ndarray | None = None
+    balanced_composite: np.ndarray | None = None
+    physics_first_composite: np.ndarray | None = None
 
 
 def _upsampled_axis(arr: np.ndarray, factor: float) -> np.ndarray:
@@ -39,13 +46,13 @@ def _pick_well_separated_points(candidates: list[dict[str, Any]], min_sep_px: in
         i, j = cand["i"], cand["j"]
         ok = True
         for prev in chosen:
-            if (i - prev["i"]) ** 2 + (j - prev["j"]) ** 2 < min_sep_px ** 2:
+            if (i - prev["i"]) ** 2 + (j - prev["j"]) ** 2 < min_sep_px**2:
                 ok = False
                 break
         if ok:
             chosen.append(cand)
-        if len(chosen) >= top_n:
-            break
+            if len(chosen) >= top_n:
+                break
     return chosen
 
 
@@ -64,24 +71,66 @@ def _component_polygon(lons: np.ndarray, lats: np.ndarray) -> list[list[float]]:
     return poly
 
 
-def compute_attracting_ftle(ds, u_var: str, v_var: str, config_raw: dict[str, Any]) -> FTLEOutputs:
+def robust_normalize(field: np.ndarray, q_low: float = 5.0, q_high: float = 95.0) -> np.ndarray:
+    arr = np.array(field, dtype=float, copy=True)
+    arr[~np.isfinite(arr)] = np.nan
+    lo = np.nanpercentile(arr, q_low)
+    hi = np.nanpercentile(arr, q_high)
+    if not np.isfinite(lo) or not np.isfinite(hi) or hi <= lo:
+        out = np.zeros_like(arr)
+        out[np.isfinite(arr)] = 0.0
+        return out
+    out = (arr - lo) / (hi - lo)
+    out = np.clip(out, 0.0, 1.0)
+    out[~np.isfinite(arr)] = np.nan
+    return out
+
+
+def compute_ridge_support(lon_grid: np.ndarray, lat_grid: np.ndarray, ridge_curves_lonlat: list[np.ndarray], ftle_smooth: np.ndarray, d0_deg: float = 0.15) -> np.ndarray:
+    if not ridge_curves_lonlat:
+        return np.zeros_like(ftle_smooth, dtype=float)
+    support_terms = []
+    ftle_norm = robust_normalize(ftle_smooth)
+    lon_axis = lon_grid[:, 0]
+    lat_axis = lat_grid[0, :]
+    for ridge in ridge_curves_lonlat:
+        if len(ridge) == 0:
+            continue
+        d2 = (lon_grid[..., None] - ridge[:, 0]) ** 2 + (lat_grid[..., None] - ridge[:, 1]) ** 2
+        d = np.sqrt(np.nanmin(d2, axis=-1))
+        ix = np.abs(lon_axis[:, None] - ridge[:, 0][None, :]).argmin(axis=0)
+        iy = np.abs(lat_axis[None, :] - ridge[:, 1][:, None]).argmin(axis=1)
+        strengths = [float(ftle_norm[a, b]) for a, b in zip(ix, iy)]
+        ridge_strength = float(np.nanmean(strengths)) if strengths else 0.5
+        term = np.clip(ridge_strength, 0.0, 1.0) * np.exp(-d / max(d0_deg, 1e-6))
+        support_terms.append(np.clip(term, 0.0, 1.0))
+    if not support_terms:
+        return np.zeros_like(ftle_smooth, dtype=float)
+    prod = np.ones_like(ftle_smooth, dtype=float)
+    for term in support_terms:
+        prod *= 1.0 - term
+    return np.clip(1.0 - prod, 0.0, 1.0)
+
+
+def compute_attracting_ftle(ds, u_var: str, v_var: str, config_raw: dict[str, Any], aoi_info: AOIInfo | None = None) -> FTLEOutputs:
     from math import copysign
-    from numbacs.flows import get_interp_arrays_2D, get_flow_2D
-    from numbacs.integration import flowmap_grid_2D
+
     from numbacs.diagnostics import C_eig_2D, ftle_from_eig
     from numbacs.extraction import ftle_ordered_ridges
+    from numbacs.flows import get_flow_2D, get_interp_arrays_2D
+    from numbacs.integration import flowmap_grid_2D
 
     lon = ds["longitude"].values.astype(float)
     lat = ds["latitude"].values.astype(float)
     time = ds["time"].values
     target_time = np.datetime64(ds["time"].values[-1])
-
     lon0 = float(lon.mean())
     lat0 = float(lat.mean())
+
     x_native, _ = local_xy_from_lonlat(lon, np.full_like(lon, lat0), lon0=lon0, lat0=lat0)
     _, y_native = local_xy_from_lonlat(np.full_like(lat, lon0), lat, lon0=lon0, lat0=lat0)
-
     t_hours = ((time - target_time) / np.timedelta64(1, "h")).astype(float)
+
     T = -24.0 * float(config_raw["backward_days"])
     t0 = 0.0
     params = np.array([copysign(1.0, T)], dtype=float)
@@ -113,7 +162,6 @@ def compute_attracting_ftle(ds, u_var: str, v_var: str, config_raw: dict[str, An
         rtol=float(integ.get("rtol", 1e-6)),
         atol=float(integ.get("atol", 1e-8)),
     )
-
     eigvals, eigvecs = C_eig_2D(flowmap, dx, dy)
     eigval_max = eigvals[:, :, 1]
     eigvec_max = eigvecs[:, :, :, 1]
@@ -122,8 +170,8 @@ def compute_attracting_ftle(ds, u_var: str, v_var: str, config_raw: dict[str, An
     ridge_cfg = config_raw["ridge_extraction"]
     sigma = float(ridge_cfg.get("smooth_sigma", 1.0))
     ftle_smooth = gaussian_filter(ftle, sigma=sigma, mode="nearest")
-
     dist_tol = float(ridge_cfg.get("dist_tol_grid_cells", 3.0)) * max(dx, dy)
+
     ridge_curves_xy = ftle_ordered_ridges(
         ftle_smooth,
         eigvec_max,
@@ -144,6 +192,16 @@ def compute_attracting_ftle(ds, u_var: str, v_var: str, config_raw: dict[str, An
     for rc in ridge_curves_xy:
         rlon, rlat = lonlat_from_local_xy(rc[:, 0], rc[:, 1], lon0=lon0, lat0=lat0)
         ridge_curves_lonlat.append(np.column_stack([rlon, rlat]))
+
+    mask = None
+    if aoi_info is not None:
+        mask = polygon_mask(lon_grid, lat_grid, aoi_info.polygons)
+        ftle = np.where(mask, ftle, np.nan)
+        ftle_smooth = np.where(mask, ftle_smooth, np.nan)
+
+    ridge_support = compute_ridge_support(lon_grid, lat_grid, ridge_curves_lonlat, ftle_smooth)
+    if mask is not None:
+        ridge_support = np.where(mask, ridge_support, np.nan)
 
     hot_cfg = config_raw["hotspots"]
     field = np.array(ftle_smooth, copy=True)
@@ -181,20 +239,20 @@ def compute_attracting_ftle(ds, u_var: str, v_var: str, config_raw: dict[str, An
     clusters = []
     cell_area_km2 = abs(dx * dy)
     for lab in range(1, n_labels + 1):
-        mask = labels == lab
-        if not np.any(mask):
+        mask_lab = labels == lab
+        if not np.any(mask_lab):
             continue
-        coords = np.argwhere(mask)
-        vals = field[mask]
+        coords = np.argwhere(mask_lab)
+        vals = field[mask_lab]
         peak_idx_local = int(np.nanargmax(vals))
         peak_ij = coords[peak_idx_local]
-        pts_lon = lon_grid[mask]
-        pts_lat = lat_grid[mask]
+        pts_lon = lon_grid[mask_lab]
+        pts_lat = lat_grid[mask_lab]
         polygon = _component_polygon(pts_lon, pts_lat)
         cluster = {
             "cluster_id": lab,
-            "n_cells": int(mask.sum()),
-            "area_km2": float(mask.sum() * cell_area_km2),
+            "n_cells": int(mask_lab.sum()),
+            "area_km2": float(mask_lab.sum() * cell_area_km2),
             "peak_ftle": float(vals[peak_idx_local]),
             "peak_lon": float(lon_grid[tuple(peak_ij)]),
             "peak_lat": float(lat_grid[tuple(peak_ij)]),
@@ -213,6 +271,7 @@ def compute_attracting_ftle(ds, u_var: str, v_var: str, config_raw: dict[str, An
         ftle_smooth=ftle_smooth,
         ridge_curves_xy=ridge_curves_xy,
         ridge_curves_lonlat=ridge_curves_lonlat,
+        ridge_support=ridge_support,
         hotspots=hotspots,
         clusters=clusters,
         lon_grid=lon_grid,
@@ -222,4 +281,6 @@ def compute_attracting_ftle(ds, u_var: str, v_var: str, config_raw: dict[str, An
         target_time=target_iso,
         u_variable=u_var,
         v_variable=v_var,
+        aoi_mask=mask,
+        metadata={},
     )

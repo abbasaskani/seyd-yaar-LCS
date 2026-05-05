@@ -1,77 +1,39 @@
 from __future__ import annotations
 
-import argparse
 import json
-from pathlib import Path
-import sys
-
-ROOT = Path(__file__).resolve().parents[1]
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
+from datetime import datetime, timedelta, timezone
 
 from lcs_pipeline.config import load_config
-from lcs_pipeline.copernicus_io import describe_dataset, estimate_subset, resolve_target_time, resolve_requested_variables, make_json_safe, human_size_mb
+from lcs_pipeline.coords import aoi_from_geojson, bbox_info
+from lcs_pipeline.copernicus_io import describe_dataset, estimate_subset, resolve_requested_variables
+from lcs_pipeline.timezones import build_target_windows, select_preset
+from zoneinfo import ZoneInfo
 
 
-def parse_args():
-    ap = argparse.ArgumentParser()
-    ap.add_argument('--config', default='config/defaults.json')
-    ap.add_argument('--mode', choices=['today','tomorrow','custom'], default='today')
-    ap.add_argument('--custom-date')
-    ap.add_argument('--backward-days', type=float)
-    ap.add_argument('--lon-min', type=float)
-    ap.add_argument('--lon-max', type=float)
-    ap.add_argument('--lat-min', type=float)
-    ap.add_argument('--lat-max', type=float)
-    ap.add_argument('--output', default='outputs/estimate_report.json')
-    return ap.parse_args()
-
-
-def main():
-    args = parse_args()
-    cfg = load_config(args.config)
-    bbox = dict(cfg.raw['default_bbox'])
-    for cli, key in [('lon_min','lon_min'),('lon_max','lon_max'),('lat_min','lat_min'),('lat_max','lat_max')]:
-        val = getattr(args, cli)
-        if val is not None:
-            bbox[key] = val
-    run_cfg = dict(cfg.raw)
-    run_cfg['date_mode'] = args.mode
-    if args.custom_date:
-        run_cfg['custom_date'] = args.custom_date
-    if args.backward_days is not None:
-        run_cfg['backward_days'] = args.backward_days
-
-    ds_meta = describe_dataset(cfg.raw['dataset_id'])
-    start_dt, target_dt, mode = resolve_target_time(run_cfg, ds_meta)
-    request_variables = resolve_requested_variables(ds_meta, cfg.raw['u_variable_candidates'], cfg.raw['v_variable_candidates'])
-    est = estimate_subset(
-        dataset_id=cfg.raw['dataset_id'],
-        variables=request_variables,
-        lon_min=bbox['lon_min'], lon_max=bbox['lon_max'], lat_min=bbox['lat_min'], lat_max=bbox['lat_max'],
-        start_dt=start_dt, end_dt=target_dt,
-        coordinates_selection_method=cfg.raw.get('coordinates_selection_method', 'nearest'),
-    )
-    payload = make_json_safe({
-        'run_label': mode,
-        'dataset_id': cfg.raw['dataset_id'],
-        'dataset_name': ds_meta.get('dataset_name'),
-        'bbox': bbox,
-        'window_start_utc': start_dt.isoformat(),
-        'window_end_utc': target_dt.isoformat(),
-        'estimated_final_subset_file': {'mb': est.get('file_size'), 'human': human_size_mb(est.get('file_size'))},
-        'estimated_total_data_transfer': {'mb': est.get('data_transfer_size'), 'human': human_size_mb(est.get('data_transfer_size'))},
-        'variables': est.get('variables'),
-        'coordinates_extent': est.get('coordinates_extent'),
-        'status': est.get('status'),
-        'message': est.get('message'),
-        'file_path': est.get('file_path'),
-        'filename': est.get('filename'),
+def main() -> None:
+    project = load_config("config/defaults.json")
+    cfg = project.raw
+    aoi_path = project.resolve_path(cfg.get("aoi_geojson", "config/aoi/current.geojson"))
+    aoi = aoi_from_geojson(aoi_path) if aoi_path.exists() else bbox_info(cfg["default_bbox"])
+    tz_decision = select_preset(cfg, aoi.centroid_lon, aoi.centroid_lat)
+    now_utc = datetime.now(timezone.utc)
+    local_today = now_utc.astimezone(ZoneInfo(tz_decision.preset.tz)).replace(hour=0, minute=0, second=0, microsecond=0)
+    nominal_local, windows_utc, subset_end_utc = build_target_windows(cfg, local_today, tz_decision.preset.tz)
+    subset_start_utc = windows_utc[0][0] - timedelta(days=float(cfg.get("backward_days", 7)))
+    ds_meta = describe_dataset(cfg["dataset_id"])
+    u_var, v_var = resolve_requested_variables(ds_meta, cfg["u_variable_candidates"], cfg["v_variable_candidates"])
+    estimate = estimate_subset(cfg["dataset_id"], aoi.bbox, [u_var, v_var], subset_start_utc, subset_end_utc, cfg.get("coordinates_selection_method", "nearest"))
+    estimate.update({
+        "aoi": aoi.bbox,
+        "timezone_preset": tz_decision.preset.__dict__,
+        "timezone_auto_selected": tz_decision.auto_selected,
+        "nominal_local": nominal_local.isoformat(),
     })
-    out = Path(args.output)
+    out = project.outputs_dir / "estimate_report.json"
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding='utf-8')
-    print(json.dumps(payload, indent=2, ensure_ascii=False))
+    out.write_text(json.dumps(estimate, indent=2, ensure_ascii=False), encoding="utf-8")
+    print(out)
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     main()

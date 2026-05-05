@@ -12,6 +12,7 @@
     "vtotal",
     "v"
   ],
+  "aoi_geojson": "config/aoi/current.geojson",
   "default_bbox": {
     "lon_min": 61.0,
     "lon_max": 65.0,
@@ -19,7 +20,6 @@
     "lat_max": 22.0
   },
   "backward_days": 7,
-  "analysis_lag_hours": 6,
   "coordinates_selection_method": "nearest",
   "compute_grid_factor": 3.0,
   "integrator": {
@@ -42,20 +42,87 @@
   "clusters": {
     "percentile": 94.0
   },
+  "persistence": {
+    "default_window_days": 5,
+    "windows_days": [
+      3,
+      5
+    ],
+    "robust_quantiles": [
+      5,
+      95
+    ]
+  },
+  "composites": {
+    "balanced": {
+      "ftle": 0.3333333333,
+      "ridge_support": 0.3333333333,
+      "persistence": 0.3333333333
+    },
+    "physics_first": {
+      "ftle": 0.5,
+      "ridge_support": 0.25,
+      "persistence": 0.25
+    }
+  },
+  "time_reference": {
+    "mode": "auto",
+    "target_local_hour": 18,
+    "fallback_same_day_end_hour": 23,
+    "fallback_next_day_end_hour": 6,
+    "presets": [
+      {
+        "key": "seychelles",
+        "label": "Seychelles-centric",
+        "tz": "Indian/Mahe",
+        "utc_offset_hint": "UTC+4",
+        "lon": 55.45,
+        "lat": -4.62
+      },
+      {
+        "key": "mauritius",
+        "label": "Mauritius/Reunion-centric",
+        "tz": "Indian/Mauritius",
+        "utc_offset_hint": "UTC+4",
+        "lon": 57.55,
+        "lat": -20.16
+      },
+      {
+        "key": "muscat",
+        "label": "Oman / west Arabian Sea",
+        "tz": "Asia/Muscat",
+        "utc_offset_hint": "UTC+4",
+        "lon": 58.41,
+        "lat": 23.59
+      },
+      {
+        "key": "maldives",
+        "label": "Maldives / central Arabian Sea",
+        "tz": "Indian/Maldives",
+        "utc_offset_hint": "UTC+5",
+        "lon": 73.22,
+        "lat": 3.2
+      }
+    ]
+  },
+  "run_horizons_days": [
+    -2,
+    -1,
+    0,
+    1,
+    2,
+    3,
+    4,
+    5
+  ],
   "media": {
     "create_mp4": true,
-    "max_frames": 72,
-    "quiver_stride": 3,
-    "fps": 6
+    "fps": 2,
+    "video_default_layer": "physics_first_composite"
   },
-  "scheduled_modes": [
-    "today",
-    "tomorrow"
-  ],
   "outputs_dir": "outputs",
   "pages_dir": "docs/latest",
   "keep_archive_in_repo": 0,
-  "page_show_custom_archive": 0,
-  "store_raw_subset_in_repo": 1,
-  "publish_latest_to_pages": 1
+  "publish_latest_to_pages": 1,
+  "store_raw_subset_in_repo": 1
 }

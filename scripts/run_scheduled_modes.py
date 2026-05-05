@@ -1,32 +1,21 @@
 from __future__ import annotations
 
-from pathlib import Path
 import subprocess
 import sys
-import json
+from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+from lcs_pipeline.config import load_config
 
 
-def main():
-    cfg = json.loads((ROOT / 'config' / 'defaults.json').read_text(encoding='utf-8'))
-    modes = cfg.get('scheduled_modes', ['today', 'tomorrow'])
-    bbox = cfg['default_bbox']
-    backward_days = cfg.get('backward_days', 7)
-    for mode in modes:
-        cmd = [
-            sys.executable, str(ROOT / 'scripts' / 'run_pipeline.py'),
-            '--config', str(ROOT / 'config' / 'defaults.json'),
-            '--mode', mode,
-            '--backward-days', str(backward_days),
-            '--lon-min', str(bbox['lon_min']), '--lon-max', str(bbox['lon_max']),
-            '--lat-min', str(bbox['lat_min']), '--lat-max', str(bbox['lat_max']),
-            '--skip-confirm',
-            '--label', mode,
-        ]
-        print('Running scheduled mode:', mode)
+def main() -> None:
+    project = load_config("config/defaults.json")
+    cfg = project.raw
+    for offset in cfg.get("run_horizons_days", [-2, -1, 0, 1, 2, 3, 4, 5]):
+        label = { -2: "m2", -1: "yesterday", 0: "today", 1: "tomorrow" }.get(offset, f"plus_{offset}" if offset > 1 else f"minus_{abs(offset)}")
+        cmd = [sys.executable, "scripts/run_pipeline.py", "--config", "config/defaults.json", "--offset-days", str(offset), "--run-label", label, "--mode", "scheduled"]
         subprocess.run(cmd, check=True)
+    subprocess.run([sys.executable, "scripts/build_pages.py", "--config", "config/defaults.json"], check=True)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
