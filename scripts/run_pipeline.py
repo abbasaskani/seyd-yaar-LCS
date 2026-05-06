@@ -138,7 +138,8 @@ def main() -> None:
         ds_run = ds
 
     ftle_out = compute_attracting_ftle(ds_run, u_var=u_var, v_var=v_var, config_raw=cfg, aoi_info=aoi_info)
-    ftle_out.metadata = {
+    existing_meta = ftle_out.metadata or {}
+    ftle_out.metadata = {**existing_meta,
         "run_label": run_label,
         "mode": args.mode,
         "aoi_source": aoi_source,
@@ -173,7 +174,7 @@ def main() -> None:
     )
     save_summary_json(ftle_out, staging_dir / "summary.json")
 
-    archive_key = f"{iso_utc_tag(selection.actual_utc)}__{run_label}"
+    archive_key = iso_utc_tag(selection.actual_utc)
     archive_dir = project.archive_dir / archive_key
     ensure_clean_dir(archive_dir)
     for item in staging_dir.iterdir():
