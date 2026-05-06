@@ -1,7 +1,9 @@
 from __future__ import annotations
+
 from pathlib import Path
 from typing import Iterable
 import imageio.v2 as imageio
+
 
 def build_sequence_video(image_paths: Iterable[str | Path], out_path: str | Path, fps: int = 2) -> Path:
     out_path = Path(out_path)
