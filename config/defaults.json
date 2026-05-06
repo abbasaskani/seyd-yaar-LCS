@@ -2,8 +2,16 @@
   "project_name": "seyd-yaar-LCS",
   "product_id": "GLOBAL_ANALYSISFORECAST_PHY_001_024",
   "dataset_id": "cmems_mod_glo_phy_anfc_merged-uv_PT1H-i",
-  "u_variable_candidates": ["uo", "utotal", "u"],
-  "v_variable_candidates": ["vo", "vtotal", "v"],
+  "u_variable_candidates": [
+    "uo",
+    "utotal",
+    "u"
+  ],
+  "v_variable_candidates": [
+    "vo",
+    "vtotal",
+    "v"
+  ],
   "aoi_geojson": "config/aoi/current.geojson",
   "backward_days": 7,
   "coordinates_selection_method": "nearest",
@@ -30,8 +38,14 @@
   },
   "persistence": {
     "default_window_days": 5,
-    "windows_days": [3, 5],
-    "robust_quantiles": [5, 95]
+    "windows_days": [
+      3,
+      5
+    ],
+    "robust_quantiles": [
+      5,
+      95
+    ]
   },
   "composites": {
     "balanced": {
@@ -93,7 +107,16 @@
       }
     ]
   },
-  "run_horizons_days": [-2, -1, 0, 1, 2, 3, 4, 5],
+  "run_horizons_days": [
+    -2,
+    -1,
+    0,
+    1,
+    2,
+    3,
+    4,
+    5
+  ],
   "media": {
     "create_mp4": true,
     "fps": 2,
@@ -104,5 +127,12 @@
   "archive_dir": "outputs/archive",
   "keep_archive_in_repo": 1,
   "publish_latest_to_pages": 1,
-  "store_raw_subset_in_repo": 1
+  "store_raw_subset_in_repo": 1,
+  "velocity_preprocess": {
+    "extra_dim_strategy": "surface_first",
+    "min_valid_time_fraction": 0.5,
+    "min_valid_ocean_cells": 25,
+    "fill_invalid_method": "nearest",
+    "suppress_solver_output": true
+  }
 }
