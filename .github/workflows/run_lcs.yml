@@ -58,14 +58,10 @@ concurrency:
 jobs:
   run:
     runs-on: ubuntu-latest
-    timeout-minutes: 360
     env:
       COPERNICUSMARINE_SERVICE_USERNAME: ${{ secrets.COPERNICUSMARINE_SERVICE_USERNAME }}
       COPERNICUSMARINE_SERVICE_PASSWORD: ${{ secrets.COPERNICUSMARINE_SERVICE_PASSWORD }}
       PYTHONUNBUFFERED: '1'
-      TQDM_DISABLE: '1'
-      PYTHONWARNINGS: 'once'
-      COPERNICUSMARINE_DISABLE_PROGRESS_BAR: '1'
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v6
@@ -78,6 +74,8 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e .
           python -m pip install -r requirements.txt
+      - name: Verify source layout
+        run: python scripts/verify_source_layout.py
       - name: Run routine horizons
         if: github.event_name == 'schedule' || github.event.inputs.mode_choice == 'routine'
         run: python scripts/run_scheduled_modes.py
