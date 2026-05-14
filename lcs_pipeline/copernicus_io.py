@@ -1,138 +1,119 @@
-from __future__ import annotations
+name: Run LCS pipeline
 
-from datetime import datetime, timezone
-from pathlib import Path
-from typing import Any
+on:
+  workflow_dispatch:
+    inputs:
+      mode_choice:
+        description: routine | single_horizon | custom_range | custom_single
+        required: true
+        default: routine
+        type: choice
+        options:
+          - routine
+          - single_horizon
+          - custom_range
+          - custom_single
+      horizon_offset:
+        description: Single horizon offset in days for single_horizon mode
+        required: false
+        default: ''
+        type: string
+      timezone_preset:
+        description: Timezone preset override key
+        required: false
+        default: utc_plus_4
+        type: string
+      range_start_local_date:
+        description: Start local date for custom_range (YYYY-MM-DD)
+        required: false
+        default: ''
+        type: string
+      range_end_local_date:
+        description: End local date for custom_range (YYYY-MM-DD)
+        required: false
+        default: ''
+        type: string
+      range_step_hours:
+        description: Step hours for custom_range
+        required: false
+        default: '24'
+        type: string
+      single_local_datetime:
+        description: Local datetime for custom_single (YYYY-MM-DDTHH:MM)
+        required: false
+        default: ''
+        type: string
+  schedule:
+    - cron: '0 3 * * *'
 
-import copernicusmarine
-import xarray as xr
+permissions:
+  contents: write
+  pages: write
+  id-token: write
 
+concurrency:
+  group: lcs-pages
+  cancel-in-progress: false
 
-def _coord_limits(parts) -> tuple[Any, Any]:
-    time_min = None
-    time_max = None
-    for part in parts:
-        try:
-            coords = part.get_coordinates()
-        except Exception:
-            coords = []
-        for coord in coords:
-            sid = getattr(coord, 'coordinate_id', '') or getattr(coord, 'name', '') or getattr(coord, 'standard_name', '')
-            if sid in {'time', 'valid_time'}:
-                time_min = getattr(coord, 'minimum_value', time_min)
-                time_max = getattr(coord, 'maximum_value', time_max)
-    return time_min, time_max
-
-
-def describe_dataset(dataset_id: str) -> dict[str, Any]:
-    cat = copernicusmarine.describe(dataset_id=dataset_id, disable_progress_bar=True)
-    prod = cat.products[0]
-    ds = prod.datasets[0]
-    version = ds.versions[0]
-    part = version.parts[0]
-    time_min, time_max = _coord_limits(version.parts)
-    variables = []
-    try:
-        for var in part.services[0].variables:
-            variables.append({
-                'short_name': getattr(var, 'short_name', None),
-                'standard_name': getattr(var, 'standard_name', None),
-                'units': getattr(var, 'units', None),
-            })
-    except Exception:
-        pass
-    return {
-        'dataset_id': ds.dataset_id,
-        'dataset_name': ds.dataset_name,
-        'product_id': prod.product_id,
-        'part_name': getattr(part, 'name', None),
-        'time_min': time_min,
-        'time_max': time_max,
-        'variables': variables,
-    }
-
-
-def resolve_requested_variables(ds_meta: dict[str, Any], u_candidates: list[str], v_candidates: list[str]) -> tuple[str, str]:
-    short_names = []
-    standard_to_short = {}
-    for item in ds_meta.get('variables', []) or []:
-        short = item.get('short_name')
-        std = item.get('standard_name')
-        if short:
-            short_names.append(short)
-        if std and short:
-            standard_to_short[std] = short
-
-    def _pick(candidates: list[str]) -> str:
-        for cand in candidates:
-            if cand in short_names:
-                return cand
-            mapped = standard_to_short.get(cand)
-            if mapped:
-                return mapped
-        raise KeyError(f'Could not resolve requested variable from {candidates!r}; available={sorted(set(short_names))}')
-
-    return _pick(u_candidates), _pick(v_candidates)
-
-
-def estimate_subset(dataset_id: str, bbox: dict[str, float], variables: list[str], start_utc: datetime, end_utc: datetime, coordinates_selection_method: str = 'nearest') -> dict[str, Any]:
-    response = copernicusmarine.subset(
-        dataset_id=dataset_id,
-        variables=variables,
-        minimum_longitude=float(bbox['lon_min']),
-        maximum_longitude=float(bbox['lon_max']),
-        minimum_latitude=float(bbox['lat_min']),
-        maximum_latitude=float(bbox['lat_max']),
-        start_datetime=start_utc,
-        end_datetime=end_utc,
-        coordinates_selection_method=coordinates_selection_method,
-        dry_run=True,
-    )
-    return {
-        'repr': repr(response),
-        'start_utc': start_utc.isoformat(),
-        'end_utc': end_utc.isoformat(),
-        'bbox': bbox,
-        'variables': variables,
-    }
-
-
-def download_subset(dataset_id: str, bbox: dict[str, float], variables: list[str], start_utc: datetime, end_utc: datetime, coordinates_selection_method: str, output_path: str | Path) -> Path:
-    output_path = Path(output_path)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    copernicusmarine.subset(
-        dataset_id=dataset_id,
-        variables=variables,
-        minimum_longitude=float(bbox['lon_min']),
-        maximum_longitude=float(bbox['lon_max']),
-        minimum_latitude=float(bbox['lat_min']),
-        maximum_latitude=float(bbox['lat_max']),
-        start_datetime=start_utc,
-        end_datetime=end_utc,
-        coordinates_selection_method=coordinates_selection_method,
-        output_filename=output_path.name,
-        output_directory=str(output_path.parent),
-    )
-    if output_path.exists():
-        return output_path
-    matches = sorted(output_path.parent.glob(f'{output_path.stem}*.nc'))
-    if not matches:
-        raise FileNotFoundError(f'Subset download finished but file was not found near {output_path}')
-    return matches[0]
-
-
-def normalize_dataset(ds_path: str | Path, u_var: str, v_var: str) -> xr.Dataset:
-    ds = xr.open_dataset(ds_path)
-    rename_map = {}
-    if 'longitude' not in ds.coords and 'lon' in ds.coords:
-        rename_map['lon'] = 'longitude'
-    if 'latitude' not in ds.coords and 'lat' in ds.coords:
-        rename_map['lat'] = 'latitude'
-    if rename_map:
-        ds = ds.rename(rename_map)
-    if 'time' not in ds.coords:
-        raise KeyError("Normalized subset dataset has no 'time' coordinate")
-    for var in (u_var, v_var):
-        if var not in ds:
-            raise KeyError(f'Required velocity variable {var!r} is missing from subset dataset')
-    return ds.sortby('time')
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    env:
+      COPERNICUSMARINE_SERVICE_USERNAME: ${{ secrets.COPERNICUSMARINE_SERVICE_USERNAME }}
+      COPERNICUSMARINE_SERVICE_PASSWORD: ${{ secrets.COPERNICUSMARINE_SERVICE_PASSWORD }}
+      PYTHONUNBUFFERED: '1'
+      TQDM_DISABLE: '1'
+      PYTHONWARNINGS: 'once'
+      COPERNICUSMARINE_DISABLE_PROGRESS_BAR: '1'
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.10'
+          cache: 'pip'
+          cache-dependency-path: requirements.txt
+      - name: Install package and requirements
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e .
+          python -m pip install -r requirements.txt
+      - name: Run routine horizons
+        if: github.event_name == 'schedule' || github.event.inputs.mode_choice == 'routine'
+        run: python scripts/run_scheduled_modes.py
+      - name: Run one horizon
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.mode_choice == 'single_horizon'
+        run: |
+          python scripts/run_pipeline.py --offset-days "${{ github.event.inputs.horizon_offset }}" --preset "${{ github.event.inputs.timezone_preset }}" --run-label manual_horizon --mode single_horizon
+          python scripts/build_pages.py
+      - name: Run custom range
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.mode_choice == 'custom_range'
+        run: |
+          python scripts/run_custom_range.py --start-local-date "${{ github.event.inputs.range_start_local_date }}" --end-local-date "${{ github.event.inputs.range_end_local_date }}" --step-hours "${{ github.event.inputs.range_step_hours }}" --preset "${{ github.event.inputs.timezone_preset }}"
+      - name: Run custom single target
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.mode_choice == 'custom_single'
+        run: |
+          python scripts/run_single_target.py --target-local-datetime "${{ github.event.inputs.single_local_datetime }}" --preset "${{ github.event.inputs.timezone_preset }}"
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: lcs-run
+          path: |
+            outputs/latest/
+            outputs/archive/
+            docs/latest/
+      - name: Commit latest outputs
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add outputs/latest outputs/archive docs/latest config/aoi/current.geojson config/defaults.json pyproject.toml lcs_pipeline/__init__.py
+          git diff --cached --quiet || git commit -m "Update LCS outputs"
+          git push
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: docs
+      - name: Deploy Pages
+        uses: actions/deploy-pages@v4
