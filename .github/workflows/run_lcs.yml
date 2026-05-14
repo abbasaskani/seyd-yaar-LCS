@@ -58,10 +58,14 @@ concurrency:
 jobs:
   run:
     runs-on: ubuntu-latest
+    timeout-minutes: 360
     env:
       COPERNICUSMARINE_SERVICE_USERNAME: ${{ secrets.COPERNICUSMARINE_SERVICE_USERNAME }}
       COPERNICUSMARINE_SERVICE_PASSWORD: ${{ secrets.COPERNICUSMARINE_SERVICE_PASSWORD }}
       PYTHONUNBUFFERED: '1'
+      TQDM_DISABLE: '1'
+      PYTHONWARNINGS: 'once'
+      COPERNICUSMARINE_DISABLE_PROGRESS_BAR: '1'
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v6
