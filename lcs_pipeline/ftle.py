@@ -74,97 +74,44 @@ def _component_polygon(lons: np.ndarray, lats: np.ndarray) -> list[list[float]]:
 
 
 def robust_normalize(field: np.ndarray, q_low: float = 5.0, q_high: float = 95.0) -> np.ndarray:
-    """Robust 0..1 normalization without emitting NumPy empty-slice warnings.
-
-    The previous version called nanpercentile directly. If a masked/land-only
-    field reached this function, NumPy printed warnings into GitHub Actions logs.
-    This version first checks finite samples and returns an all-zero finite mask
-    when no usable values exist.
-    """
     arr = np.array(field, dtype=float, copy=True)
-    finite = np.isfinite(arr)
-    out = np.zeros_like(arr, dtype=float)
-    out[~finite] = np.nan
-    if not np.any(finite):
-        return out
-
-    vals = arr[finite]
-    lo = float(np.percentile(vals, q_low))
-    hi = float(np.percentile(vals, q_high))
+    arr[~np.isfinite(arr)] = np.nan
+    lo = np.nanpercentile(arr, q_low)
+    hi = np.nanpercentile(arr, q_high)
     if not np.isfinite(lo) or not np.isfinite(hi) or hi <= lo:
-        out[finite] = 0.0
+        out = np.zeros_like(arr)
+        out[np.isfinite(arr)] = 0.0
         return out
-
-    out[finite] = np.clip((arr[finite] - lo) / (hi - lo), 0.0, 1.0)
+    out = (arr - lo) / (hi - lo)
+    out = np.clip(out, 0.0, 1.0)
+    out[~np.isfinite(arr)] = np.nan
     return out
 
 
-
 def compute_ridge_support(lon_grid: np.ndarray, lat_grid: np.ndarray, ridge_curves_lonlat: list[np.ndarray], ftle_smooth: np.ndarray, d0_deg: float = 0.15) -> np.ndarray:
-    """Build a multi-ridge structural support layer without noisy empty means.
-
-    Invalid ridges are skipped. This is intentionally conservative: a ridge that
-    only samples masked/NaN FTLE values should not receive an arbitrary default
-    strength, because that would bias the operational Accumulation Potential.
-    """
     if not ridge_curves_lonlat:
         return np.zeros_like(ftle_smooth, dtype=float)
-
-    support_terms: list[np.ndarray] = []
+    support_terms = []
     ftle_norm = robust_normalize(ftle_smooth)
     lon_axis = lon_grid[:, 0]
     lat_axis = lat_grid[0, :]
-
-    skipped_invalid_ridges = 0
-
     for ridge in ridge_curves_lonlat:
-        ridge = np.asarray(ridge, dtype=float)
-        if ridge.ndim != 2 or ridge.shape[1] < 2 or ridge.shape[0] == 0:
-            skipped_invalid_ridges += 1
+        if len(ridge) == 0:
             continue
-
-        finite_ridge = np.isfinite(ridge[:, 0]) & np.isfinite(ridge[:, 1])
-        ridge = ridge[finite_ridge]
-        if ridge.shape[0] == 0:
-            skipped_invalid_ridges += 1
-            continue
-
         d2 = (lon_grid[..., None] - ridge[:, 0]) ** 2 + (lat_grid[..., None] - ridge[:, 1]) ** 2
         d = np.sqrt(np.nanmin(d2, axis=-1))
-
         ix = np.abs(lon_axis[:, None] - ridge[:, 0][None, :]).argmin(axis=0)
         iy = np.abs(lat_axis[None, :] - ridge[:, 1][:, None]).argmin(axis=1)
-
-        strengths = np.asarray([ftle_norm[a, b] for a, b in zip(ix, iy)], dtype=float)
-        strengths = strengths[np.isfinite(strengths)]
-
-        # Key fix: do not call nanmean on an all-NaN/empty ridge sample.
-        # Such ridges are usually coastal/masked artifacts after AOI/ocean masking.
-        if strengths.size == 0:
-            skipped_invalid_ridges += 1
-            continue
-
-        ridge_strength = float(np.mean(strengths))
-        if not np.isfinite(ridge_strength) or ridge_strength <= 0.0:
-            skipped_invalid_ridges += 1
-            continue
-
+        strengths = [float(ftle_norm[a, b]) for a, b in zip(ix, iy)]
+        ridge_strength = float(np.nanmean(strengths)) if strengths else 0.5
         term = np.clip(ridge_strength, 0.0, 1.0) * np.exp(-d / max(d0_deg, 1e-6))
-        term = np.clip(term, 0.0, 1.0)
-        term[~np.isfinite(term)] = 0.0
-        support_terms.append(term)
-
+        support_terms.append(np.clip(term, 0.0, 1.0))
     if not support_terms:
         return np.zeros_like(ftle_smooth, dtype=float)
-
     prod = np.ones_like(ftle_smooth, dtype=float)
     for term in support_terms:
         prod *= 1.0 - term
-
-    support = np.clip(1.0 - prod, 0.0, 1.0)
-    support[~np.isfinite(support)] = 0.0
-    return support
-
+    return np.clip(1.0 - prod, 0.0, 1.0)
 
 
 def compute_attracting_ftle(ds, u_var: str, v_var: str, config_raw: dict[str, Any], aoi_info: AOIInfo | None = None) -> FTLEOutputs:
