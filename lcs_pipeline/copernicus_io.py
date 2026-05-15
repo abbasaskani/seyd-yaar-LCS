@@ -87,6 +87,7 @@ def estimate_subset(dataset_id: str, bbox: dict[str, float], variables: list[str
         end_datetime=end_utc,
         coordinates_selection_method=coordinates_selection_method,
         dry_run=True,
+        disable_progress_bar=True,
     )
     return {
         'repr': repr(response),
@@ -112,6 +113,7 @@ def download_subset(dataset_id: str, bbox: dict[str, float], variables: list[str
         coordinates_selection_method=coordinates_selection_method,
         output_filename=output_path.name,
         output_directory=str(output_path.parent),
+        disable_progress_bar=True,
     )
     if output_path.exists():
         return output_path
