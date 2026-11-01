@@ -18,11 +18,34 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
-    start = datetime.fromisoformat(args.start_local_date + "T00:00:00")
-    end = datetime.fromisoformat(args.end_local_date + "T00:00:00")
-    step = timedelta(hours=args.step_hours)
-    cur = start
-    while cur <= end:
+
+    if not args.start_local_date or not args.end_local_date:
+        raise SystemExit(
+            "custom_range requires both --start-local-date and --end-local-date. "
+            "Example: --start-local-date 2025-01-01 --end-local-date 2025-01-07"
+        )
+
+    try:
+        start = datetime.fromisoformat(args.start_local_date)
+    except ValueError as exc:
+        raise SystemExit(
+            f"Invalid start date: {args.start_local_date!r}. Use YYYY-MM-DD."
+        ) from exc
+
+    try:
+        end = datetime.fromisoformat(args.end_local_date)
+    except ValueError as exc:
+        raise SystemExit(
+            f"Invalid end date: {args.end_local_date!r}. Use YYYY-MM-DD."
+        ) from exc
+
+    if args.step_hours <= 0:
+        raise SystemExit(f"step-hours must be > 0, got {args.step_hours!r}")
+
+    cur = start.replace(hour=0, minute=0, second=0, microsecond=0)
+    end_dt = end.replace(hour=0, minute=0, second=0, microsecond=0)
+
+    while cur <= end_dt:
         label = f"range_{cur.strftime('%Y%m%dT%H%M')}"
         cmd = [
             sys.executable,
@@ -39,7 +62,8 @@ def main() -> None:
         if args.preset:
             cmd.extend(["--preset", args.preset])
         subprocess.run(cmd, check=True)
-        cur += step
+        cur += timedelta(hours=args.step_hours)
+
     subprocess.run([sys.executable, "scripts/build_pages.py", "--config", args.config], check=True)
 
 
