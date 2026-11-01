@@ -21,33 +21,85 @@ class AOIInfo:
 
 
 def _flatten_polygons(geom: dict) -> list[np.ndarray]:
-    gtype = geom.get('type')
-    coords = geom.get('coordinates', [])
-    if gtype == 'Polygon':
+    gtype = geom.get("type")
+    coords = geom.get("coordinates", [])
+    if gtype == "Polygon":
         return [np.asarray(coords[0], dtype=float)] if coords else []
-    if gtype == 'MultiPolygon':
+    if gtype == "MultiPolygon":
         return [np.asarray(poly[0], dtype=float) for poly in coords if poly]
-    raise ValueError(f'Unsupported geometry type: {gtype}')
+    raise ValueError(f"Unsupported geometry type: {gtype}")
 
 
 def aoi_from_geojson(path: str | Path) -> AOIInfo:
     path = Path(path)
-    obj = json.loads(path.read_text(encoding='utf-8'))
-    if obj.get('type') == 'FeatureCollection':
-        geoms = [feat['geometry'] for feat in obj.get('features', []) if feat.get('geometry')]
-    elif obj.get('type') == 'Feature':
-        geoms = [obj['geometry']]
+    obj = json.loads(path.read_text(encoding="utf-8"))
+    if obj.get("type") == "FeatureCollection":
+        geoms = [feat["geometry"] for feat in obj.get("features", []) if feat.get("geometry")]
+    elif obj.get("type") == "Feature":
+        geoms = [obj["geometry"]]
     else:
         geoms = [obj]
+
     polygons: list[np.ndarray] = []
     for geom in geoms:
         polygons.extend(_flatten_polygons(geom))
+
     if not polygons:
-        raise ValueError('No supported AOI polygons found in GeoJSON')
+        raise ValueError("No supported AOI polygons found in GeoJSON")
+
     xs = np.concatenate([p[:, 0] for p in polygons])
     ys = np.concatenate([p[:, 1] for p in polygons])
-    bbox = {'lon_min': float(xs.min()), 'lon_max': float(xs.max()), 'lat_min': float(ys.min()), 'lat_max': float(ys.max())}
-    return AOIInfo('MultiPolygon' if len(polygons) > 1 else 'Polygon', bbox, float(xs.mean()), float(ys.mean()), polygons, str(path))
+    bbox = {
+        "lon_min": float(xs.min()),
+        "lon_max": float(xs.max()),
+        "lat_min": float(ys.min()),
+        "lat_max": float(ys.max()),
+    }
+    return AOIInfo(
+        "MultiPolygon" if len(polygons) > 1 else "Polygon",
+        bbox,
+        float(xs.mean()),
+        float(ys.mean()),
+        polygons,
+        str(path),
+    )
+
+
+def aoi_from_bbox(min_lon: float, max_lon: float, min_lat: float, max_lat: float) -> AOIInfo:
+    min_lon = float(min_lon)
+    max_lon = float(max_lon)
+    min_lat = float(min_lat)
+    max_lat = float(max_lat)
+
+    if min_lon > max_lon:
+        min_lon, max_lon = max_lon, min_lon
+    if min_lat > max_lat:
+        min_lat, max_lat = max_lat, min_lat
+
+    rect = np.asarray(
+        [
+            [min_lon, min_lat],
+            [max_lon, min_lat],
+            [max_lon, max_lat],
+            [min_lon, max_lat],
+            [min_lon, min_lat],
+        ],
+        dtype=float,
+    )
+    bbox = {
+        "lon_min": min_lon,
+        "lon_max": max_lon,
+        "lat_min": min_lat,
+        "lat_max": max_lat,
+    }
+    return AOIInfo(
+        geometry_type="Polygon",
+        bbox=bbox,
+        centroid_lon=float((min_lon + max_lon) / 2.0),
+        centroid_lat=float((min_lat + max_lat) / 2.0),
+        polygons=[rect],
+        source_path=None,
+    )
 
 
 def local_xy_from_lonlat(lon, lat, lon0: float, lat0: float):
