@@ -50,36 +50,6 @@ on:
         default: ''
         type: string
 
-      bbox:
-        description: Optional custom AOI bbox as min_lon,max_lon,min_lat,max_lat
-        required: false
-        default: ''
-        type: string
-
-      min_lon:
-        description: Optional custom AOI min longitude
-        required: false
-        default: ''
-        type: string
-
-      max_lon:
-        description: Optional custom AOI max longitude
-        required: false
-        default: ''
-        type: string
-
-      min_lat:
-        description: Optional custom AOI min latitude
-        required: false
-        default: ''
-        type: string
-
-      max_lat:
-        description: Optional custom AOI max latitude
-        required: false
-        default: ''
-        type: string
-
   schedule:
     - cron: '0 3 * * *'
 
@@ -119,14 +89,6 @@ jobs:
           python -m pip install -e .
           python -m pip install -r requirements.txt
 
-      - name: Clean stale generated state
-        shell: bash
-        run: |
-          set -euo pipefail
-          rm -rf outputs/latest outputs/archive docs/latest
-          find . -type d -name "__pycache__" -prune -exec rm -rf {} +
-          find . -type f -name "*.pyc" -delete
-
       - name: Verify source layout
         run: python scripts/verify_source_layout.py
 
@@ -160,27 +122,6 @@ jobs:
           python scripts/run_single_target.py \
             --target-local-datetime "${{ github.event.inputs.single_local_datetime }}" \
             --preset "${{ github.event.inputs.timezone_preset }}"
-
-      - name: Run manual bbox override
-        if: github.event_name == 'workflow_dispatch' && github.event.inputs.bbox != ''
-        run: |
-          python scripts/run_pipeline.py \
-            --config config/defaults.json \
-            --bbox "${{ github.event.inputs.bbox }}" \
-            --run-label manual_bbox \
-            --mode manual_bbox
-
-      - name: Run manual min/max bbox override
-        if: github.event_name == 'workflow_dispatch' && github.event.inputs.min_lon != '' && github.event.inputs.max_lon != '' && github.event.inputs.min_lat != '' && github.event.inputs.max_lat != ''
-        run: |
-          python scripts/run_pipeline.py \
-            --config config/defaults.json \
-            --min-lon "${{ github.event.inputs.min_lon }}" \
-            --max-lon "${{ github.event.inputs.max_lon }}" \
-            --min-lat "${{ github.event.inputs.min_lat }}" \
-            --max-lat "${{ github.event.inputs.max_lat }}" \
-            --run-label manual_bbox \
-            --mode manual_bbox
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
