@@ -79,9 +79,32 @@ def ensure_clean_dir(path: Path) -> None:
     path.mkdir(parents=True, exist_ok=True)
 
 
+def purge_generated_dirs(project) -> None:
+    """Clear stale generated outputs without touching source files."""
+    for candidate in (
+        project.outputs_dir / "latest",
+        project.archive_dir,
+        project.outputs_dir / "_staging",
+        project.pages_dir,
+    ):
+        if not candidate.exists():
+            continue
+        if candidate.is_dir():
+            shutil.rmtree(candidate)
+        else:
+            candidate.unlink()
+
+    project.outputs_dir.mkdir(parents=True, exist_ok=True)
+    project.archive_dir.mkdir(parents=True, exist_ok=True)
+    project.pages_dir.mkdir(parents=True, exist_ok=True)
+    if not (project.pages_dir / ".gitkeep").exists():
+        (project.pages_dir / ".gitkeep").write_text("", encoding="utf-8")
+
+
 def main() -> None:
     args = parse_args()
     project = load_config(args.config)
+    purge_generated_dirs(project)
     cfg = project.raw
     project.outputs_dir.mkdir(parents=True, exist_ok=True)
     project.archive_dir.mkdir(parents=True, exist_ok=True)
