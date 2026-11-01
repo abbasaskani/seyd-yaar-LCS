@@ -50,6 +50,33 @@ def aoi_from_geojson(path: str | Path) -> AOIInfo:
     return AOIInfo('MultiPolygon' if len(polygons) > 1 else 'Polygon', bbox, float(xs.mean()), float(ys.mean()), polygons, str(path))
 
 
+def aoi_from_bbox(min_lon: float, max_lon: float, min_lat: float, max_lat: float) -> AOIInfo:
+    min_lon = float(min_lon)
+    max_lon = float(max_lon)
+    min_lat = float(min_lat)
+    max_lat = float(max_lat)
+    if min_lon > max_lon:
+        min_lon, max_lon = max_lon, min_lon
+    if min_lat > max_lat:
+        min_lat, max_lat = max_lat, min_lat
+    rect = np.asarray([
+        [min_lon, min_lat],
+        [max_lon, min_lat],
+        [max_lon, max_lat],
+        [min_lon, max_lat],
+        [min_lon, min_lat],
+    ], dtype=float)
+    bbox = {'lon_min': min_lon, 'lon_max': max_lon, 'lat_min': min_lat, 'lat_max': max_lat}
+    return AOIInfo(
+        geometry_type='Polygon',
+        bbox=bbox,
+        centroid_lon=float((min_lon + max_lon) / 2.0),
+        centroid_lat=float((min_lat + max_lat) / 2.0),
+        polygons=[rect],
+        source_path=None,
+    )
+
+
 def local_xy_from_lonlat(lon, lat, lon0: float, lat0: float):
     lon = np.asarray(lon, dtype=float)
     lat = np.asarray(lat, dtype=float)

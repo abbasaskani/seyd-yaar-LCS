@@ -10,7 +10,7 @@ import numpy as np
 from zoneinfo import ZoneInfo
 
 from lcs_pipeline.config import load_config
-from lcs_pipeline.coords import aoi_from_geojson
+from lcs_pipeline.coords import aoi_from_bbox, aoi_from_geojson
 from lcs_pipeline.copernicus_io import (
     describe_dataset,
     download_subset,
@@ -42,10 +42,43 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--mode", default="routine")
     p.add_argument("--target-local-date", default=None, help="YYYY-MM-DD local date override")
     p.add_argument("--target-local-datetime", default=None, help="ISO local datetime override without timezone or with timezone")
+    p.add_argument("--bbox", default=None, help="Bounding box override as min_lon,max_lon,min_lat,max_lat")
+    p.add_argument("--min-lon", type=float, default=None)
+    p.add_argument("--max-lon", type=float, default=None)
+    p.add_argument("--min-lat", type=float, default=None)
+    p.add_argument("--max-lat", type=float, default=None)
     return p.parse_args()
 
 
+def parse_bbox(raw: str) -> tuple[float, float, float, float]:
+    parts = [p.strip() for p in raw.split(",")]
+    if len(parts) != 4:
+        raise ValueError("--bbox must be in format: min_lon,max_lon,min_lat,max_lat")
+    try:
+        min_lon, max_lon, min_lat, max_lat = [float(v) for v in parts]
+    except ValueError as exc:
+        raise ValueError("--bbox values must be numeric") from exc
+    return min_lon, max_lon, min_lat, max_lat
+
+
 def resolve_aoi(project, args):
+    if args.bbox:
+        min_lon, max_lon, min_lat, max_lat = parse_bbox(args.bbox)
+        return aoi_from_bbox(min_lon, max_lon, min_lat, max_lat), f"manual_bbox:{args.bbox}"
+
+    if any(v is not None for v in [args.min_lon, args.max_lon, args.min_lat, args.max_lat]):
+        missing = [name for name, v in {
+            'min_lon': args.min_lon,
+            'max_lon': args.max_lon,
+            'min_lat': args.min_lat,
+            'max_lat': args.max_lat,
+        }.items() if v is None]
+        if missing:
+            raise ValueError(f"Missing bbox arguments: {', '.join(missing)}")
+        return aoi_from_bbox(args.min_lon, args.max_lon, args.min_lat, args.max_lat), (
+            f"manual_bbox:{args.min_lon},{args.max_lon},{args.min_lat},{args.max_lat}"
+        )
+
     path = project.resolve_path(args.aoi_file) if args.aoi_file else project.aoi_path
     if not path.exists():
         raise FileNotFoundError(f"AOI file not found at {path}")
@@ -79,9 +112,32 @@ def ensure_clean_dir(path: Path) -> None:
     path.mkdir(parents=True, exist_ok=True)
 
 
+def purge_generated_dirs(project) -> None:
+    """Clear stale generated outputs without touching source files."""
+    for candidate in (
+        project.outputs_dir / "latest",
+        project.archive_dir,
+        project.outputs_dir / "_staging",
+        project.pages_dir,
+    ):
+        if not candidate.exists():
+            continue
+        if candidate.is_dir():
+            shutil.rmtree(candidate)
+        else:
+            candidate.unlink()
+
+    project.outputs_dir.mkdir(parents=True, exist_ok=True)
+    project.archive_dir.mkdir(parents=True, exist_ok=True)
+    project.pages_dir.mkdir(parents=True, exist_ok=True)
+    if not (project.pages_dir / ".gitkeep").exists():
+        (project.pages_dir / ".gitkeep").write_text("", encoding="utf-8")
+
+
 def main() -> None:
     args = parse_args()
     project = load_config(args.config)
+    purge_generated_dirs(project)
     cfg = project.raw
     project.outputs_dir.mkdir(parents=True, exist_ok=True)
     project.archive_dir.mkdir(parents=True, exist_ok=True)
